@@ -2,9 +2,8 @@
 
 **A TOML-based interface specification for anything runnable.**
 
-Define your runnable's interface once in `pyproject.toml` or `runspec.toml`.
-Get validation, type coercion, and rich error messages for free.
-Make any runnable available to AI agents — with a single command.
+Define your runnable's interface once in TOML. Get a CLI, validation,
+`--help`, and agent-ready schemas — all from the same source, with no extra code.
 
 ## Install
 
@@ -56,5 +55,28 @@ That's it. runspec handles the rest.
 - **Type coercion** — arguments arrive as native Python types, no casting needed
 - **Validation** — missing required args and bad values produce clear, human-friendly errors
 - **Inference** — types and required flags are inferred from defaults where possible
-- **Agent-ready** — emit your runnable's interface as a tool schema for AI agents
+- **Built-in `--help`** — usage and argument descriptions generated automatically, no code required
+- **Autonomy control** — declare how much trust AI agents should have when running each runnable, from `autonomous` to `manual`
+- **Automatic discovery** — any runspec-aware package installed in your environment is instantly findable with `runspec discover`
+- **Agent-ready schemas** — emit all your runnables as tool schemas for AI agents with a single command
+- **Config validation** — `runspec check` catches problems in your TOML before your users do
 - **Language-agnostic** — the spec is TOML, implementations exist for multiple languages
+
+## For developers
+
+Define your interface in TOML and your users get a fully documented, validated
+CLI with no argument parsing code written.
+
+## For AI agents
+
+Once an agent knows to run `runspec discover`, every runspec-aware runnable
+installed in the environment is available — no registration, no hand-written
+tool definitions.
+
+```bash
+runspec discover          # find every runspec-aware runnable in this environment
+runspec emit --format mcp # emit all of them as agent-ready tool schemas
+```
+
+Every `pip install` of a runspec-aware package is a new capability.
+No `skills.md`. No glue code. Just TOML that the developer was going to write anyway.
