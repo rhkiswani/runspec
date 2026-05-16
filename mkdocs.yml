@@ -8,6 +8,13 @@ theme:
   palette:
     primary: indigo
 
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
 nav:
   - Home: index.md
   - Quick Start: quickstart.md
