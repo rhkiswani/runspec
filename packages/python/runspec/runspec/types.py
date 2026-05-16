@@ -12,8 +12,9 @@ Custom types can be registered by downstream packages or user code:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 # Type coercer signature: (raw_value: str, arg_spec: dict) -> Any
 TypeCoercer = Callable[[Any, dict[str, Any]], Any]
@@ -61,18 +62,13 @@ def coerce(raw_value: Any, arg_spec: dict[str, Any]) -> Any:
 
     if coercer is None:
         raise TypeError(
-            f"Unknown type '{type_name}' for argument '{arg_spec.get('name', '?')}'. "
-            f"Registered types: {', '.join(sorted(_REGISTRY.keys()))}\n"
-            f"Register custom types with runspec.register_type()."
+            f"Unknown type '{type_name}' for argument '{arg_spec.get('name', '?')}'. Registered types: {', '.join(sorted(_REGISTRY.keys()))}\nRegister custom types with runspec.register_type()."
         )
 
     try:
         return coercer(raw_value, arg_spec)
     except (ValueError, TypeError) as e:
-        raise ValueError(
-            f"Cannot coerce value {raw_value!r} to type '{type_name}' "
-            f"for argument '--{arg_spec.get('name', '?')}': {e}"
-        ) from e
+        raise ValueError(f"Cannot coerce value {raw_value!r} to type '{type_name}' for argument '--{arg_spec.get('name', '?')}': {e}") from e
 
 
 def list_types() -> list[str]:
@@ -81,6 +77,7 @@ def list_types() -> list[str]:
 
 
 # ── Built-in Python type coercers ─────────────────────────────────────────────
+
 
 def _coerce_str(value: Any, arg: dict[str, Any]) -> str:
     return str(value)
@@ -125,6 +122,7 @@ def _coerce_choice(value: Any, arg: dict[str, Any]) -> str:
     options = arg.get("options", [])
     if options and coerced not in options:
         from runspec.errors import format_invalid_choice
+
         raise ValueError(format_invalid_choice(coerced, options, arg.get("name", "?")))
     return coerced
 
@@ -135,16 +133,14 @@ def _check_range(value: int | float, arg: dict[str, Any]) -> None:
     if range_ is not None:
         min_val, max_val = range_
         if not (min_val <= value <= max_val):
-            raise ValueError(
-                f"Value {value} is out of range [{min_val}, {max_val}]"
-            )
+            raise ValueError(f"Value {value} is out of range [{min_val}, {max_val}]")
 
 
 # Register all built-in coercers
-register_type("str",    _coerce_str)
-register_type("int",    _coerce_int)
-register_type("float",  _coerce_float)
-register_type("bool",   _coerce_bool)
-register_type("flag",   _coerce_flag)
-register_type("path",   _coerce_path)
+register_type("str", _coerce_str)
+register_type("int", _coerce_int)
+register_type("float", _coerce_float)
+register_type("bool", _coerce_bool)
+register_type("flag", _coerce_flag)
+register_type("path", _coerce_path)
 register_type("choice", _coerce_choice)

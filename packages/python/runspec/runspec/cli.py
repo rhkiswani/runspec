@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def main() -> None:
@@ -27,8 +28,8 @@ def main() -> None:
 
     commands = {
         "discover": cmd_discover,
-        "check":    cmd_check,
-        "emit":     cmd_emit,
+        "check": cmd_check,
+        "emit": cmd_emit,
     }
 
     if command not in commands:
@@ -46,7 +47,7 @@ def cmd_discover(args: list[str]) -> None:
     """
     fmt = _get_flag(args, "--format", default="text")
 
-    discovered: list[dict] = []
+    discovered: list[dict[str, Any]] = []
 
     # Check current directory
     local = _discover_local()
@@ -103,16 +104,11 @@ def cmd_check(args: list[str]) -> None:
         if entry_points:
             ok.append(f"[project.scripts] found — {len(entry_points)} entry point(s)")
         else:
-            warnings.append(
-                "No [project.scripts] found — agents may not discover runnables automatically\n"
-                "  Add entry points to pyproject.toml or use runspec.toml"
-            )
+            warnings.append("No [project.scripts] found — agents may not discover runnables automatically\n  Add entry points to pyproject.toml or use runspec.toml")
 
     # Check for reserved name
     if "config" in raw["runnables"]:
-        errors.append(
-            "'config' is a reserved name — rename your runnable to something else"
-        )
+        errors.append("'config' is a reserved name — rename your runnable to something else")
 
     # Check each runnable
     for runnable_name, runnable in raw["runnables"].items():
@@ -122,18 +118,13 @@ def cmd_check(args: list[str]) -> None:
             ok.append(f"'{runnable_name}' — description present")
 
         if not runnable.get("autonomy"):
-            warnings.append(
-                f"'{runnable_name}' autonomy not declared — will default to "
-                f"'{raw['config']['autonomy_default']}'"
-            )
+            warnings.append(f"'{runnable_name}' autonomy not declared — will default to '{raw['config']['autonomy_default']}'")
         else:
             ok.append(f"'{runnable_name}' — autonomy: {runnable['autonomy']}")
 
         for arg_name, arg in runnable.get("args", {}).items():
             if not arg.get("description") and arg.get("required"):
-                warnings.append(
-                    f"'{runnable_name}.{arg_name}' is required but has no description"
-                )
+                warnings.append(f"'{runnable_name}.{arg_name}' is required but has no description")
 
     # Print results
     for msg in ok:
@@ -157,8 +148,8 @@ def cmd_emit(args: list[str]) -> None:
     fmt = _get_flag(args, "--format", default="mcp")
 
     from runspec.finder import find_config
-    from runspec.loader import load_raw
     from runspec.inference import infer_script
+    from runspec.loader import load_raw
 
     try:
         config_path, file_fmt = find_config(Path.cwd())
@@ -180,21 +171,19 @@ def cmd_emit(args: list[str]) -> None:
     schema = {}
     for name, runnable in runnables.items():
         inferred = infer_script(runnable, config["autonomy_default"])
-        schema[name] = _build_schema(name, inferred, fmt)
+        schema[name] = _build_schema(name, inferred, fmt or "mcp")
 
-    if fmt == "mcp":
-        output = {"tools": list(schema.values())}
-    else:
-        output = schema
+    output = {"tools": list(schema.values())} if fmt == "mcp" else schema
 
     print(json.dumps(output, indent=2, default=str))
 
 
 # ── Schema builders ───────────────────────────────────────────────────────────
 
-def _build_schema(name: str, script: dict, fmt: str) -> dict:
+
+def _build_schema(name: str, script: dict[str, Any], fmt: str) -> dict[str, Any]:
     """Build a tool schema for a script in the requested format."""
-    properties: dict = {}
+    properties: dict[str, Any] = {}
     required_args: list[str] = []
 
     for arg_name, arg in script.get("args", {}).items():
@@ -203,7 +192,7 @@ def _build_schema(name: str, script: dict, fmt: str) -> dict:
         if arg.get("required"):
             required_args.append(arg_name)
 
-    schema: dict = {
+    schema: dict[str, Any] = {
         "name": name,
         "description": script.get("description") or "",
         "x-autonomy": script.get("autonomy", "confirm"),
@@ -222,19 +211,19 @@ def _build_schema(name: str, script: dict, fmt: str) -> dict:
     return schema
 
 
-def _arg_to_json_schema(arg: dict) -> dict:
+def _arg_to_json_schema(arg: dict[str, Any]) -> dict[str, Any]:
     """Convert a runspec arg spec to a JSON Schema property."""
     type_map = {
-        "str":    "string",
-        "int":    "integer",
-        "float":  "number",
-        "bool":   "boolean",
-        "flag":   "boolean",
-        "path":   "string",
+        "str": "string",
+        "int": "integer",
+        "float": "number",
+        "bool": "boolean",
+        "flag": "boolean",
+        "path": "string",
         "choice": "string",
     }
 
-    prop: dict = {
+    prop: dict[str, Any] = {
         "type": type_map.get(arg.get("type", "str"), "string"),
     }
 
@@ -260,7 +249,8 @@ def _arg_to_json_schema(arg: dict) -> dict:
 
 # ── Discovery helpers ─────────────────────────────────────────────────────────
 
-def _discover_local() -> list[dict]:
+
+def _discover_local() -> list[dict[str, Any]]:
     """Look for runspec config in the current directory."""
     from runspec.finder import find_config
     from runspec.loader import load_raw
@@ -268,26 +258,23 @@ def _discover_local() -> list[dict]:
     try:
         config_path, fmt = find_config(Path.cwd())
         raw = load_raw(config_path, fmt)
-        return [
-            {"source": str(config_path), "runnable": name, "spec": spec}
-            for name, spec in raw["runnables"].items()
-        ]
+        return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
     except FileNotFoundError:
         return []
 
 
-def _discover_installed() -> list[dict]:
+def _discover_installed() -> list[dict[str, Any]]:
     """
     Find runspec-aware packages in the current Python environment
     using importlib.metadata.
     """
     import importlib.metadata as meta
 
-    discovered: list[dict] = []
+    discovered: list[dict[str, Any]] = []
 
     for dist in meta.packages_distributions():
         try:
-            pkg_meta = meta.metadata(dist)
+            meta.metadata(dist)
             # Check if package has runspec.toml as package data
             # This is a simplified check — full implementation uses
             # importlib.resources to look for the file
@@ -298,7 +285,7 @@ def _discover_installed() -> list[dict]:
     return discovered
 
 
-def _emit_all(discovered: list[dict], fmt: str) -> dict:
+def _emit_all(discovered: list[dict[str, Any]], fmt: str) -> dict[str, Any]:
     """Emit all discovered runnables as a unified schema."""
     tools = []
     for item in discovered:
@@ -307,9 +294,9 @@ def _emit_all(discovered: list[dict], fmt: str) -> dict:
     return {"tools": tools}
 
 
-def _print_discover_text(discovered: list[dict]) -> None:
+def _print_discover_text(discovered: list[dict[str, Any]]) -> None:
     """Pretty-print discovered runnables."""
-    by_source: dict[str, list] = {}
+    by_source: dict[str, list[str]] = {}
     for item in discovered:
         src = item["source"]
         by_source.setdefault(src, []).append(item["runnable"])
@@ -324,6 +311,7 @@ def _print_discover_text(discovered: list[dict]) -> None:
 
 
 # ── Arg parsing helpers ───────────────────────────────────────────────────────
+
 
 def _get_flag(args: list[str], flag: str, default: str | None = None) -> str | None:
     """Extract a --flag value from args list."""

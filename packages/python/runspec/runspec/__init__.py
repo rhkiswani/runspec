@@ -8,9 +8,9 @@ Public API:
     register_type() → None      Register a custom type coercer
 """
 
-from runspec.parser import parse, load_spec
+from runspec.models import Arg, Group, RunSpec
+from runspec.parser import load_spec, parse
 from runspec.types import register_type
-from runspec.models import RunSpec, Arg, Group
 
 __version__ = "0.1.0"
 __all__ = [

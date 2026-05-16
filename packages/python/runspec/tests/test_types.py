@@ -2,9 +2,11 @@
 Tests for types.py — type registry and built-in Python coercers.
 """
 
-import pytest
 from pathlib import Path
-from runspec.types import coerce, register_type, list_types
+
+import pytest
+
+from runspec.types import coerce, list_types, register_type
 
 
 class TestBuiltinCoercers:

@@ -37,11 +37,7 @@ def find_config(start: Path | None = None) -> tuple[Path, str]:
             return runspec_toml, "runspec"
 
     raise FileNotFoundError(
-        "No runspec configuration found.\n"
-        "Expected one of:\n"
-        "  - pyproject.toml with [tool.runspec] section\n"
-        "  - runspec.toml\n\n"
-        "Run 'runspec check' to validate your project setup."
+        "No runspec configuration found.\nExpected one of:\n  - pyproject.toml with [tool.runspec] section\n  - runspec.toml\n\nRun 'runspec check' to validate your project setup."
     )
 
 

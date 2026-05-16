@@ -51,11 +51,7 @@ def load_raw(config_path: Path, fmt: str) -> dict[str, Any]:
     # Runnables are everything at the top level except [config]
     # In pyproject.toml: [tool.runspec.greeter] → key "greeter"
     # In runspec.toml:   [greeter]              → key "greeter"
-    runnables_raw = {
-        key: value
-        for key, value in raw.items()
-        if key != "config" and isinstance(value, dict)
-    }
+    runnables_raw = {key: value for key, value in raw.items() if key != "config" and isinstance(value, dict)}
 
     return {
         "config": _normalise_config(raw.get("config", {})),
@@ -81,10 +77,7 @@ def _normalise_runnables(raw: dict[str, Any]) -> dict[str, Any]:
     Each runnable's args are expanded from shorthand to full form.
     Reserved name 'config' is excluded by the caller.
     """
-    return {
-        name: _normalise_script(name, script_data)
-        for name, script_data in raw.items()
-    }
+    return {name: _normalise_script(name, script_data) for name, script_data in raw.items()}
 
 
 def _normalise_script(name: str, raw: dict[str, Any]) -> dict[str, Any]:
@@ -96,10 +89,7 @@ def _normalise_script(name: str, raw: dict[str, Any]) -> dict[str, Any]:
         "autonomy_reason": raw.get("autonomy-reason"),
         "args": _normalise_args(raw.get("args", {})),
         "groups": _normalise_groups(raw.get("groups", {})),
-        "commands": {
-            cmd_name: _normalise_script(cmd_name, cmd_data)
-            for cmd_name, cmd_data in raw.get("commands", {}).items()
-        },
+        "commands": {cmd_name: _normalise_script(cmd_name, cmd_data) for cmd_name, cmd_data in raw.get("commands", {}).items()},
     }
 
 
@@ -177,6 +167,4 @@ def _read_entry_points(pyproject_data: dict[str, Any]) -> dict[str, str]:
         return dict(project_scripts)
 
     # Fall back to [tool.poetry.scripts]
-    return dict(
-        pyproject_data.get("tool", {}).get("poetry", {}).get("scripts", {})
-    )
+    return dict(pyproject_data.get("tool", {}).get("poetry", {}).get("scripts", {}))

@@ -49,20 +49,14 @@ def infer_arg(raw: dict[str, Any]) -> dict[str, Any]:
     # ── Required inference ────────────────────────────────────────────────────
     if result.get("required") is None:
         # Explicitly no default = required
-        if default is None and result.get("type") != "flag":
-            result["required"] = True
-        # path with no default = required
-        elif result["type"] == "path" and default is None:
+        if default is None and result.get("type") != "flag" or result["type"] == "path" and default is None:
             result["required"] = True
         else:
             result["required"] = False
 
     # ── Choice options must be present for choice type ─────────────────────
     if result["type"] == "choice" and not options:
-        raise ValueError(
-            f"Argument '{raw.get('name', '?')}' has type 'choice' "
-            "but no 'options' list was provided."
-        )
+        raise ValueError(f"Argument '{raw.get('name', '?')}' has type 'choice' but no 'options' list was provided.")
 
     return result
 
@@ -79,16 +73,10 @@ def infer_script(raw_script: dict[str, Any], config_autonomy: str) -> dict[str, 
         result["autonomy"] = config_autonomy
 
     # Infer all args
-    result["args"] = {
-        name: infer_arg(arg)
-        for name, arg in result.get("args", {}).items()
-    }
+    result["args"] = {name: infer_arg(arg) for name, arg in result.get("args", {}).items()}
 
     # Recurse into subcommands
-    result["commands"] = {
-        cmd_name: infer_script(cmd_data, config_autonomy)
-        for cmd_name, cmd_data in result.get("commands", {}).items()
-    }
+    result["commands"] = {cmd_name: infer_script(cmd_data, config_autonomy) for cmd_name, cmd_data in result.get("commands", {}).items()}
 
     return result
 

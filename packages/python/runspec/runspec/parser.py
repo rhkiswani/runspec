@@ -13,11 +13,11 @@ from typing import Any
 
 from runspec import errors
 from runspec.finder import find_config, find_script_name
-from runspec.inference import infer_script, effective_autonomy
+from runspec.inference import effective_autonomy, infer_script
 from runspec.loader import load_raw
 from runspec.models import Arg, Group, RunSpec
 from runspec.types import coerce
-from runspec.validator import validate_args, validate_groups, raise_if_errors
+from runspec.validator import raise_if_errors, validate_args, validate_groups
 
 
 def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunSpec:
@@ -47,18 +47,11 @@ def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunS
 
     # Guard reserved name
     if name == "config":
-        raise errors.RunSpecError(
-            "✗  'config' is a reserved name in runspec.\n"
-            "   Rename your runnable to something else."
-        )
+        raise errors.RunSpecError("✗  'config' is a reserved name in runspec.\n   Rename your runnable to something else.")
 
     if name not in raw["runnables"]:
         available = ", ".join(raw["runnables"].keys()) or "(none)"
-        raise errors.RunSpecError(
-            f"✗  Runnable '{name}' not found in runspec config.\n"
-            f"   Available runnables: {available}\n"
-            f"   Config: {config_path}"
-        )
+        raise errors.RunSpecError(f"✗  Runnable '{name}' not found in runspec config.\n   Available runnables: {available}\n   Config: {config_path}")
 
     # 4. Infer defaults for the script
     raw_script = infer_script(raw["runnables"][name], config["autonomy_default"])
@@ -119,6 +112,7 @@ def load_spec(script_name: str | None = None) -> RunSpec:
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+
 def _infer_from_argv() -> str:
     """Infer script name from sys.argv[0]."""
     return Path(sys.argv[0]).stem if sys.argv else "unknown"
@@ -152,7 +146,7 @@ def _parse_argv(
     Handles --flag, --key value, --key=value, -short, and multiple values.
     """
     # Build lookup maps
-    name_map: dict[str, str] = {}   # --flag-name → normalised_name
+    name_map: dict[str, str] = {}  # --flag-name → normalised_name
     short_map: dict[str, str] = {}  # -v → normalised_name
     for name, spec in arg_specs.items():
         normalised = name.replace("-", "_")
@@ -161,9 +155,7 @@ def _parse_argv(
         if spec.get("short"):
             short_map[spec["short"]] = normalised
 
-    result: dict[str, Any] = {
-        name.replace("-", "_"): None for name in arg_specs
-    }
+    result: dict[str, Any] = {name.replace("-", "_"): None for name in arg_specs}
 
     i = 0
     while i < len(argv):
@@ -188,12 +180,10 @@ def _parse_argv(
                 result[norm] = True
                 i += 1
             elif i + 1 < len(argv) and not argv[i + 1].startswith("-"):
-                raw_value = argv[i + 1]
-                # Handle delimiter splitting
+                raw_str = argv[i + 1]
                 delimiter = spec.get("delimiter")
-                if delimiter:
-                    raw_value = raw_value.split(delimiter)
-                result[norm] = _append_or_set(result.get(norm), raw_value, spec)
+                parsed: str | list[str] = raw_str.split(delimiter) if delimiter else raw_str
+                result[norm] = _append_or_set(result.get(norm), parsed, spec)
                 i += 2
             else:
                 # Flag-style bool

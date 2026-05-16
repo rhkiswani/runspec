@@ -42,8 +42,9 @@ Issues      = "https://github.com/JasonFinestone/runspec/issues"
 Changelog   = "https://github.com/JasonFinestone/runspec/blob/main/CHANGELOG.md"
 
 [build-system]
-requires      = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires      = ["setuptools>=69.0.2", "wheel"]
+build-backend = "setuptools.build_meta"
+
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -53,7 +54,7 @@ runspec = ["py.typed"]
 
 # ── ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]
-line-length = 88
+line-length = 200
 target-version = "py311"
 
 [tool.ruff.lint]

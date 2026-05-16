@@ -4,7 +4,8 @@ Every rule in SPEC.md must have a corresponding test here.
 """
 
 import pytest
-from runspec.inference import infer_arg, infer_script, effective_autonomy
+
+from runspec.inference import effective_autonomy, infer_arg, infer_script
 
 
 class TestTypeInference:

@@ -72,11 +72,13 @@ def format_out_of_range(
     name: str,
 ) -> str:
     min_val, max_val = range_
-    return "\n".join([
-        f"✗  Value out of range for --{name}: {value}",
-        f"   Expected: between {min_val} and {max_val}",
-        f"   Got: {value}",
-    ])
+    return "\n".join(
+        [
+            f"✗  Value out of range for --{name}: {value}",
+            f"   Expected: between {min_val} and {max_val}",
+            f"   Got: {value}",
+        ]
+    )
 
 
 def format_unknown_arg(name: str, known_args: list[str]) -> str:
@@ -91,40 +93,50 @@ def format_unknown_arg(name: str, known_args: list[str]) -> str:
 
 
 def format_group_exclusive(group_name: str, provided: list[str]) -> str:
-    return "\n".join([
-        f"✗  Conflicting arguments in group '{group_name}'",
-        f"   --{provided[0]} and --{provided[1]} cannot be used together",
-        "   Choose one or the other",
-    ])
+    return "\n".join(
+        [
+            f"✗  Conflicting arguments in group '{group_name}'",
+            f"   --{provided[0]} and --{provided[1]} cannot be used together",
+            "   Choose one or the other",
+        ]
+    )
 
 
 def format_group_inclusive(group_name: str, missing: list[str]) -> str:
     missing_flags = " and ".join(f"--{m}" for m in missing)
-    return "\n".join([
-        f"✗  Incomplete argument group '{group_name}'",
-        f"   Providing one of these args requires all of them",
-        f"   Also provide: {missing_flags}",
-    ])
+    return "\n".join(
+        [
+            f"✗  Incomplete argument group '{group_name}'",
+            "   Providing one of these args requires all of them",
+            f"   Also provide: {missing_flags}",
+        ]
+    )
 
 
 def format_group_at_least_one(group_name: str, args: list[str]) -> str:
-    return "\n".join([
-        f"✗  Group '{group_name}' requires at least one argument",
-        f"   Provide at least one of: {', '.join(f'--{a}' for a in args)}",
-    ])
+    return "\n".join(
+        [
+            f"✗  Group '{group_name}' requires at least one argument",
+            f"   Provide at least one of: {', '.join(f'--{a}' for a in args)}",
+        ]
+    )
 
 
 def format_group_exactly_one(group_name: str, args: list[str], provided: list[str]) -> str:
     if not provided:
-        return "\n".join([
+        return "\n".join(
+            [
+                f"✗  Group '{group_name}' requires exactly one argument",
+                f"   Provide exactly one of: {', '.join(f'--{a}' for a in args)}",
+            ]
+        )
+    return "\n".join(
+        [
             f"✗  Group '{group_name}' requires exactly one argument",
+            f"   Got {len(provided)}: {', '.join(f'--{a}' for a in provided)}",
             f"   Provide exactly one of: {', '.join(f'--{a}' for a in args)}",
-        ])
-    return "\n".join([
-        f"✗  Group '{group_name}' requires exactly one argument",
-        f"   Got {len(provided)}: {', '.join(f'--{a}' for a in provided)}",
-        f"   Provide exactly one of: {', '.join(f'--{a}' for a in args)}",
-    ])
+        ]
+    )
 
 
 def format_autonomy_violation(

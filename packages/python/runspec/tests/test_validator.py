@@ -3,8 +3,9 @@ Tests for validator.py — two-pass validation: args then groups.
 """
 
 import pytest
-from runspec.validator import validate_args, validate_groups, raise_if_errors
+
 from runspec.errors import RunSpecError
+from runspec.validator import raise_if_errors, validate_args, validate_groups
 
 
 class TestArgValidation:
@@ -34,6 +35,7 @@ class TestArgValidation:
             }
         }
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             validate_args({"threads": 4}, specs)
@@ -121,9 +123,7 @@ class TestGroupValidation:
                 "requires": [],
             }
         }
-        errors = validate_groups(
-            {"fast": None, "balanced": None, "quality": None}, groups
-        )
+        errors = validate_groups({"fast": None, "balanced": None, "quality": None}, groups)
         assert len(errors) == 1
 
     def test_exactly_one_violation_two_provided(self):
@@ -139,9 +139,7 @@ class TestGroupValidation:
                 "requires": [],
             }
         }
-        errors = validate_groups(
-            {"fast": True, "balanced": True, "quality": None}, groups
-        )
+        errors = validate_groups({"fast": True, "balanced": True, "quality": None}, groups)
         assert len(errors) == 1
 
     def test_conditional_group(self):
@@ -158,9 +156,7 @@ class TestGroupValidation:
             }
         }
         # upload provided but bucket and region missing
-        errors = validate_groups(
-            {"upload": True, "bucket": None, "region": None}, groups
-        )
+        errors = validate_groups({"upload": True, "bucket": None, "region": None}, groups)
         assert len(errors) == 1
 
 

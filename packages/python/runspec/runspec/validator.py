@@ -42,6 +42,7 @@ def validate_args(
         # Deprecated warning (not an error)
         if spec.get("deprecated"):
             import warnings
+
             warnings.warn(errors.format_deprecated(name, spec["deprecated"]), stacklevel=6)
 
     return error_messages
@@ -68,25 +69,17 @@ def validate_groups(
         provided = [a for a in group_args if parsed_values.get(a) is not None]
 
         if group.get("exclusive") and len(provided) > 1:
-            error_messages.append(
-                errors.format_group_exclusive(group_name, provided)
-            )
+            error_messages.append(errors.format_group_exclusive(group_name, provided))
 
         elif group.get("inclusive") and 0 < len(provided) < len(group_args):
             missing = [a for a in group_args if a not in provided]
-            error_messages.append(
-                errors.format_group_inclusive(group_name, missing)
-            )
+            error_messages.append(errors.format_group_inclusive(group_name, missing))
 
         elif group.get("at_least_one") and len(provided) == 0:
-            error_messages.append(
-                errors.format_group_at_least_one(group_name, group_args)
-            )
+            error_messages.append(errors.format_group_at_least_one(group_name, group_args))
 
         elif group.get("exactly_one") and len(provided) != 1:
-            error_messages.append(
-                errors.format_group_exactly_one(group_name, group_args, provided)
-            )
+            error_messages.append(errors.format_group_exactly_one(group_name, group_args, provided))
 
         elif group.get("condition"):
             condition_arg = group["condition"]
@@ -94,9 +87,7 @@ def validate_groups(
                 required_args = group.get("requires", [])
                 missing = [a for a in required_args if parsed_values.get(a) is None]
                 if missing:
-                    error_messages.append(
-                        errors.format_group_inclusive(group_name, missing)
-                    )
+                    error_messages.append(errors.format_group_inclusive(group_name, missing))
 
     return error_messages
 
