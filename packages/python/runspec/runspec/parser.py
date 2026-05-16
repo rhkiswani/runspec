@@ -60,34 +60,39 @@ def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunS
     argv_list = argv if argv is not None else sys.argv[1:]
     raw_script, active_command, argv_list = _resolve_subcommand(raw_script, argv_list)
 
-    # 6. Parse argv into raw values
+    # 6. Handle --help / -h before any validation
+    if "--help" in argv_list or "-h" in argv_list:
+        _print_help(name, raw_script, active_command)
+        sys.exit(0)
+
+    # 7. Parse argv into raw values
     parsed_values = _parse_argv(argv_list, raw_script["args"])
 
-    # 7. Apply env var fallbacks
+    # 8. Apply env var fallbacks
     parsed_values = _apply_env(parsed_values, raw_script["args"])
 
-    # 8. Apply defaults
+    # 9. Apply defaults
     parsed_values = _apply_defaults(parsed_values, raw_script["args"])
 
-    # 9. Pass 1 — validate individual args
+    # 10. Pass 1 — validate individual args
     arg_errors = validate_args(parsed_values, raw_script["args"])
     raise_if_errors(arg_errors)
 
-    # 10. Pass 2 — validate groups
+    # 11. Pass 2 — validate groups
     group_errors = validate_groups(parsed_values, raw_script["groups"])
     raise_if_errors(group_errors)
 
-    # 11. Coerce values to native Python types
+    # 12. Coerce values to native Python types
     coerced_values = _coerce_values(parsed_values, raw_script["args"])
 
-    # 12. Calculate effective autonomy
+    # 13. Calculate effective autonomy
     autonomy = effective_autonomy(
         raw_script["autonomy"],
         parsed_values,
         raw_script["args"],
     )
 
-    # 13. Build and return RunSpec
+    # 14. Build and return RunSpec
     return _build_runspec(
         name=name,
         config_path=config_path,
@@ -111,6 +116,57 @@ def load_spec(script_name: str | None = None) -> RunSpec:
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
+
+
+def _print_help(name: str, script: dict[str, Any], command: str | None) -> None:
+    """Print a human-readable help message for a runnable and exit."""
+    full_name = f"{name} {command}" if command else name
+    description = script.get("description") or ""
+    args = script.get("args", {})
+
+    # Build usage line
+    usage_parts = [full_name]
+    for arg_name, spec in args.items():
+        flag = f"--{arg_name}"
+        if spec.get("type") == "flag":
+            usage_parts.append(f"[{flag}]")
+        elif spec.get("required"):
+            usage_parts.append(f"{flag} <{spec.get('type', 'str')}>")
+        else:
+            usage_parts.append(f"[{flag} <{spec.get('type', 'str')}>]")
+
+    print(f"Usage: {' '.join(usage_parts)}")
+    if description:
+        print(f"\n{description}")
+
+    if args:
+        print("\nArguments:")
+        for arg_name, spec in args.items():
+            flag = f"  --{arg_name}"
+            arg_type = spec.get("type", "str")
+            parts = []
+            if arg_type == "flag":
+                parts.append("flag")
+            else:
+                parts.append(arg_type)
+            if spec.get("required"):
+                parts.append("required")
+            elif spec.get("default") is not None:
+                parts.append(f"default: {spec['default']}")
+            if spec.get("options"):
+                parts.append(f"one of: {', '.join(str(o) for o in spec['options'])}")
+            if spec.get("description"):
+                print(f"{flag:<24} {spec['description']}  ({', '.join(parts)})")
+            else:
+                print(f"{flag:<24} ({', '.join(parts)})")
+
+    autonomy = script.get("autonomy")
+    if autonomy:
+        print(f"\nAutonomy: {autonomy}")
+        if script.get("autonomy_reason"):
+            print(f"  {script['autonomy_reason']}")
+
+    print("\n  -h, --help    Show this message and exit")
 
 
 def _infer_from_argv() -> str:

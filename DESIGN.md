@@ -1117,6 +1117,7 @@ This is the version of `runspec` that makes the tool genuinely transformative ra
 - [ ] Should generated code be written to disk automatically or previewed first?
 - [ ] How do `ui` hints interact with MCP's evolving form specification — should we track MCP's spec or define our own and map to it?
 - [ ] Should `autonomy = "confirm"` be the default when no autonomy is declared, or should unspecified mean `autonomous`?
+- [ ] Should language packs be required to return rich metadata objects (like Python's `Arg` dataclass, which carries value + full spec metadata) or just correctly typed values? Python's `args.times.default`, `args.format.options` etc. are powerful but may be hard to replicate idiomatically in Go or Node. Decision needed before the spec locks down the language pack contract.
 
 ---
 
