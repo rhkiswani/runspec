@@ -22,3 +22,4 @@ nav:
   - Python Library: python.md
   - CLI: cli.md
   - Agent Integration: agents.md
+  - Changelog: changelog.md
