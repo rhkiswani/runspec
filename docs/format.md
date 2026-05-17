@@ -199,6 +199,87 @@ For every argument, values are resolved in this order:
 
 ---
 
+## Environment Variable Fallbacks
+
+The `env` field lets an argument read its value from an environment variable
+when nothing is passed on the command line. This is the same resolution order
+as the table above — env sits between CLI and default.
+
+```toml
+[deploy.args]
+server  = {type = "str",  env = "DEPLOY_SERVER"}
+api-key = {type = "str",  env = "DEPLOY_API_KEY",  autonomy = "manual"}
+region  = {type = "str",  env = "AWS_REGION",       default = "us-east-1"}
+dry-run = {default = false}
+```
+
+### CI/CD pattern
+
+Set variables once at the project level — your pipeline file stays identical
+across every project, and each project controls its own behaviour through
+environment variables:
+
+=== "GitLab CI"
+
+    ```yaml
+    # .gitlab-ci.yml — shared across all projects
+    deploy:
+      script: deploy --dry-run $DRY_RUN
+    ```
+
+    In **Project → Settings → CI/CD → Variables**, set:
+
+    ```
+    DEPLOY_SERVER  = web-01
+    DEPLOY_API_KEY = <secret>
+    AWS_REGION     = eu-west-1
+    ```
+
+=== "GitHub Actions"
+
+    ```yaml
+    - name: Deploy
+      run: deploy
+      env:
+        DEPLOY_SERVER: web-01
+        DEPLOY_API_KEY: ${{ secrets.DEPLOY_API_KEY }}
+        AWS_REGION: eu-west-1
+    ```
+
+=== "Ansible"
+
+    ```yaml
+    - name: Deploy application
+      command: deploy
+      environment:
+        DEPLOY_SERVER: "{{ deploy_server }}"
+        DEPLOY_API_KEY: "{{ vault_deploy_api_key }}"
+        AWS_REGION: "{{ aws_region }}"
+    ```
+
+The runnable itself never changes. Environment variables act as the interface
+between the runnable and whatever system is calling it.
+
+### .env files
+
+For local development, a `.env` file alongside your project works the same way.
+Most shells and tools (`direnv`, `python-dotenv`, `dotenvx`) load `.env`
+automatically — so developers get zero-arg invocation locally with the same
+runnable that runs in CI.
+
+```bash
+# .env (never commit secrets)
+DEPLOY_SERVER=web-01
+AWS_REGION=us-east-1
+```
+
+!!! tip
+    Combine `env` with `autonomy = "manual"` on secrets like API keys.
+    The arg is still read from the environment, but agents are blocked from
+    setting or passing it directly — the value must come from the operator.
+
+---
+
 ## Groups
 
 Groups define relationships between arguments and are validated after
