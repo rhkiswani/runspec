@@ -42,6 +42,7 @@ class Arg:
     deprecated: str | None = None
     autonomy: str | None = None
     ui: str | None = None
+    meta: dict[str, Any] | None = None
 
     # Resolution metadata
     source: str = "default"  # "cli" | "env" | "config" | "default"

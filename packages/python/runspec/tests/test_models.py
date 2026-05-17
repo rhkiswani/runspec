@@ -120,6 +120,31 @@ class TestBoolProtocol:
         assert triggered
 
 
+class TestMeta:
+    def test_meta_accessible(self):
+        a = Arg(
+            value="web-01",
+            name="server",
+            type="choice",
+            meta={"web-01": {"datacenter": "us-east"}, "web-02": {"datacenter": "us-west"}},
+        )
+        assert a.meta["web-01"]["datacenter"] == "us-east"
+
+    def test_meta_absent_is_none(self):
+        a = Arg(value="hello", name="name", type="str")
+        assert a.meta is None
+
+    def test_meta_lookup_by_value(self):
+        a = Arg(
+            value="web-02",
+            name="server",
+            type="choice",
+            meta={"web-01": {"datacenter": "us-east"}, "web-02": {"datacenter": "us-west"}},
+        )
+        datacenter = a.meta[a.value]["datacenter"]
+        assert datacenter == "us-west"
+
+
 class TestIterationProtocol:
     def test_iter_on_list_value(self):
         a = arg(["a", "b", "c"], type="str")

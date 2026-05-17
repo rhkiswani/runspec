@@ -367,6 +367,7 @@ def _build_runspec(
             deprecated=spec.get("deprecated"),
             autonomy=spec.get("autonomy"),
             ui=spec.get("ui"),
+            meta=spec.get("meta"),
             source=source,
         )
         runspec._set_arg(arg_name, arg)

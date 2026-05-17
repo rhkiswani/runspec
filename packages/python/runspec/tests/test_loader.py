@@ -286,6 +286,29 @@ output = {type = "path"}
         result = load_raw(p, "runspec")
         assert result["runnables"]["greet"]["args"]["output"]["name"] == "output"
 
+    def test_meta_passed_through(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text("""
+[greet.args.server]
+options = ["web-01", "web-02"]
+[greet.args.server.meta]
+web-01 = {datacenter = "us-east"}
+web-02 = {datacenter = "us-west"}
+""")
+        result = load_raw(p, "runspec")
+        meta = result["runnables"]["greet"]["args"]["server"]["meta"]
+        assert meta["web-01"]["datacenter"] == "us-east"
+        assert meta["web-02"]["datacenter"] == "us-west"
+
+    def test_meta_absent_is_none(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text("""
+[greet.args]
+name = {type = "str"}
+""")
+        result = load_raw(p, "runspec")
+        assert result["runnables"]["greet"]["args"]["name"]["meta"] is None
+
 
 class TestGroupNormalisation:
     def test_exclusive_group(self, tmp_path):

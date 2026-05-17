@@ -134,6 +134,7 @@ description = "Controls output quality. Values below 60 rarely useful."
 | `deprecated` | string | Deprecation message shown on use. |
 | `autonomy` | string | Per-arg autonomy override. Escalates if more restrictive. |
 | `ui` | string | Form control hint. Inferred from type if omitted. |
+| `meta` | table | Developer-defined metadata. Pass-through — runspec never interprets the contents. |
 
 ---
 

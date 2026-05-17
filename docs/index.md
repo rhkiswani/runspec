@@ -59,6 +59,7 @@ That's it. runspec handles the rest.
 - **Autonomy control** — declare how much trust AI agents should have when running each runnable, from `autonomous` to `manual`
 - **Automatic discovery** — any runspec-aware package installed in your environment is instantly findable with `runspec discover`
 - **Agent-ready schemas** — emit all your runnables as tool schemas for AI agents with a single command
+- **Self-describing results** — parsed args carry their full spec metadata, enabling code generation, logging, and generic tooling without re-reading TOML
 - **Config validation** — `runspec check` catches problems in your TOML before your users do
 - **Language-agnostic** — the spec is TOML, implementations exist for multiple languages
 
