@@ -263,6 +263,8 @@ def _discover_installed() -> list[dict[str, Any]]:
     discovered: list[dict[str, Any]] = []
 
     for dist in meta.distributions():
+        if not _requires_runspec(dist):
+            continue
         try:
             items = _check_dist_files(dist)
             if not items:
@@ -272,6 +274,20 @@ def _discover_installed() -> list[dict[str, Any]]:
             continue
 
     return discovered
+
+
+def _requires_runspec(dist: Any) -> bool:
+    """Return True if this distribution lists runspec as a dependency."""
+    import re
+
+    requires = dist.requires
+    if not requires:
+        return False
+    for req in requires:
+        name = re.split(r"[\s\[;>=<!]", req.strip())[0]
+        if name.lower().replace("-", "_") == "runspec":
+            return True
+    return False
 
 
 def _check_dist_files(dist: Any) -> list[dict[str, Any]]:
@@ -358,11 +374,10 @@ def _deduplicate(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _emit_all(discovered: list[dict[str, Any]], fmt: str) -> dict[str, Any]:
     """Emit all discovered runnables as a unified schema."""
-    tools = []
-    for item in discovered:
-        tool = _build_schema(item["runnable"], item["spec"], fmt)
-        tools.append(tool)
-    return {"tools": tools}
+    tools = [_build_schema(item["runnable"], item["spec"], fmt) for item in discovered]
+    if fmt == "mcp":
+        return {"tools": tools}
+    return {tool["name"]: tool for tool in tools}
 
 
 def _print_discover_text(discovered: list[dict[str, Any]]) -> None:

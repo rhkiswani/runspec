@@ -19,6 +19,7 @@ from runspec.cli import (
     _check_editable_source,
     _deduplicate,
     _discover_installed,
+    _requires_runspec,
 )
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -201,6 +202,49 @@ def test_check_editable_source_no_config_file(tmp_path):
         assert _check_editable_source(dist) == []
 
 
+# ── _requires_runspec ─────────────────────────────────────────────────────────
+
+
+def test_requires_runspec_no_requires():
+    dist = SimpleNamespace(requires=None)
+    assert _requires_runspec(dist) is False
+
+
+def test_requires_runspec_empty():
+    dist = SimpleNamespace(requires=[])
+    assert _requires_runspec(dist) is False
+
+
+def test_requires_runspec_found_plain():
+    dist = SimpleNamespace(requires=["runspec"])
+    assert _requires_runspec(dist) is True
+
+
+def test_requires_runspec_found_with_version():
+    dist = SimpleNamespace(requires=["runspec>=0.1.0"])
+    assert _requires_runspec(dist) is True
+
+
+def test_requires_runspec_found_with_marker():
+    dist = SimpleNamespace(requires=["runspec; python_version >= '3.10'"])
+    assert _requires_runspec(dist) is True
+
+
+def test_requires_runspec_found_case_insensitive():
+    dist = SimpleNamespace(requires=["Runspec>=0.1"])
+    assert _requires_runspec(dist) is True
+
+
+def test_requires_runspec_not_found():
+    dist = SimpleNamespace(requires=["requests>=2.0", "click>=8.0"])
+    assert _requires_runspec(dist) is False
+
+
+def test_requires_runspec_no_false_prefix_match():
+    dist = SimpleNamespace(requires=["runspec-extra>=1.0"])
+    assert _requires_runspec(dist) is False
+
+
 # ── _discover_installed ───────────────────────────────────────────────────────
 
 
@@ -214,11 +258,18 @@ def test_discover_installed_returns_list():
         assert "spec" in item
 
 
-def test_discover_installed_skips_exceptions():
-    bad_dist = SimpleNamespace(files=None)
-    bad_dist2 = SimpleNamespace(files=None)
+def test_discover_installed_skips_non_runspec_deps():
+    # A dist without runspec as a dependency should be ignored entirely
+    dist = SimpleNamespace(files=None, requires=["requests>=2.0"])
+    with patch("importlib.metadata.distributions", return_value=[dist]):
+        result = _discover_installed()
+    assert result == []
 
-    with patch("importlib.metadata.distributions", return_value=[bad_dist, bad_dist2]):
+
+def test_discover_installed_skips_exceptions():
+    # A dist that requires runspec but has files=None raises nothing, returns []
+    bad_dist = SimpleNamespace(files=None, requires=["runspec"])
+    with patch("importlib.metadata.distributions", return_value=[bad_dist]):
         result = _discover_installed()
     assert result == []
 
@@ -229,7 +280,7 @@ def test_discover_installed_strategy1_wins(tmp_path):
         description = "A tool"
     """)
     f = _make_dist_file("runspec.toml", toml_content, tmp_path)
-    dist = SimpleNamespace(files=[f])
+    dist = SimpleNamespace(files=[f], requires=["runspec>=0.1"])
 
     with patch("importlib.metadata.distributions", return_value=[dist]):
         result = _discover_installed()

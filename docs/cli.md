@@ -61,7 +61,31 @@ runspec discover [--format text|json|mcp|openai|anthropic]
 Discovers runnables in two places:
 
 1. **Local** — searches up from the current directory for `pyproject.toml` or `runspec.toml`
-2. **Installed** — scans installed packages for runspec-aware entry points
+2. **Installed** — finds packages in the current Python environment that list `runspec` as a dependency, then locates their spec
+
+### Making your package discoverable
+
+When another developer `pip install`s your package, `discover` will find it
+automatically if:
+
+- You ship a standalone `runspec.toml` inside your Python package directory,
+  **and** declare it as package data in `pyproject.toml`:
+
+```
+mypackage/
+  __init__.py
+  runspec.toml     ← inside the package, not at the project root
+```
+
+```toml
+# pyproject.toml
+[tool.setuptools.package-data]
+mypackage = ["runspec.toml"]
+```
+
+If your package is installed in editable mode (`pip install -e .`), discovery
+works automatically with either `runspec.toml` or `[tool.runspec]` in
+`pyproject.toml` — no special packaging needed.
 
 ### Formats
 
