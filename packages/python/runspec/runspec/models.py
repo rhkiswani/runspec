@@ -189,6 +189,7 @@ class RunSpec:
     __source__: Path
     __command__: str | None = None  # active subcommand if any
     __autonomy__: str = "confirm"  # effective autonomy for this invocation
+    __agent__: bool = False  # True when called via runspec serve (RUNSPEC_AGENT=1)
     __spec__: dict[str, Any] = field(default_factory=dict)
     __groups__: list[Group] = field(default_factory=list)
 

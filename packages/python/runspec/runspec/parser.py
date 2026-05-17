@@ -92,12 +92,16 @@ def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunS
         raw_script["args"],
     )
 
-    # 14. Build and return RunSpec
+    # 14. Detect agent context
+    agent = os.environ.get("RUNSPEC_AGENT", "").lower() in ("1", "true", "yes")
+
+    # 15. Build and return RunSpec
     return _build_runspec(
         name=name,
         config_path=config_path,
         command=active_command,
         autonomy=autonomy,
+        agent=agent,
         coerced_values=coerced_values,
         arg_specs=raw_script["args"],
         group_specs=raw_script["groups"],
@@ -322,6 +326,7 @@ def _build_runspec(
     config_path: Path,
     command: str | None,
     autonomy: str,
+    agent: bool,
     coerced_values: dict[str, Any],
     arg_specs: dict[str, Any],
     group_specs: dict[str, Any],
@@ -346,6 +351,7 @@ def _build_runspec(
         __source__=config_path,
         __command__=command,
         __autonomy__=autonomy,
+        __agent__=agent,
         __spec__=raw_script,
         __groups__=groups,
     )

@@ -112,6 +112,7 @@ collisions with your arg names:
 | `__source__` | `Path` | Path to the config file that was loaded |
 | `__command__` | `str \| None` | Active subcommand, if any |
 | `__autonomy__` | `str` | Effective autonomy level for this invocation |
+| `__agent__` | `bool` | `True` when called via `runspec serve` (agent context) |
 | `__spec__` | `dict` | Raw spec dict — args, groups, description, etc. |
 | `__groups__` | `list[Group]` | Validated group definitions |
 
@@ -121,6 +122,7 @@ args = runspec.parse()
 print(args.__script__)    # "deploy"
 print(args.__command__)   # "run"  (if a subcommand was matched)
 print(args.__autonomy__)  # "confirm"
+print(args.__agent__)     # True when called by an agent via runspec serve
 print(args.__source__)    # PosixPath('/home/user/project/pyproject.toml')
 ```
 
@@ -132,6 +134,19 @@ args = runspec.parse()
 
 if args.__autonomy__ == "manual":
     raise SystemExit("This runnable requires human operation.")
+```
+
+`__agent__` is `True` when the runnable is called via `runspec serve` — set by
+the `RUNSPEC_AGENT=1` environment variable that the serve layer injects. Use it
+to switch output format for agent consumers:
+
+```python
+args = runspec.parse()
+
+if args.__agent__:
+    print(json.dumps({"status": "deployed", "env": str(args.env)}))
+else:
+    print(f"✓ Deployed to {args.env}")
 ```
 
 ---
