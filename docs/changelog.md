@@ -4,6 +4,25 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.3.0 — 2026-05-17
+
+### Added
+
+**`runspec init`** — scaffold a runspec config in the current directory.
+Creates `runspec.toml` or appends `[tool.runspec.<name>]` to an existing
+`pyproject.toml`, preserving all existing content.
+
+```bash
+runspec init              # uses current directory name as the runnable name
+runspec init --name deploy
+runspec init --file runspec   # force runspec.toml even if pyproject.toml exists
+```
+
+Refuses if a runspec section already exists, listing existing runnables.
+See the [CLI reference](cli.md#runspec-init) for full details.
+
+---
+
 ## 0.2.0 — 2026-05-17
 
 ### Added

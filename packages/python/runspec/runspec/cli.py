@@ -27,6 +27,7 @@ def main() -> None:
     rest = args[1:]
 
     commands = {
+        "init": cmd_init,
         "discover": cmd_discover,
         "check": cmd_check,
         "emit": cmd_emit,
@@ -136,6 +137,109 @@ def cmd_serve(args: list[str]) -> None:
     from runspec.serve import serve
 
     serve()
+
+
+def cmd_init(args: list[str]) -> None:
+    """Create or update pyproject.toml or runspec.toml with a runspec scaffold."""
+    name_flag = _get_flag(args, "--name")
+    file_flag = _get_flag(args, "--file")
+
+    cwd = Path.cwd()
+    runnable_name = name_flag or _sanitize_name(cwd.name)
+
+    pyproject = cwd / "pyproject.toml"
+    runspec_toml = cwd / "runspec.toml"
+
+    if file_flag == "runspec":
+        _init_runspec_toml(runspec_toml, runnable_name)
+    elif file_flag == "pyproject" or pyproject.exists():
+        _init_pyproject(pyproject, runnable_name)
+    else:
+        _init_runspec_toml(runspec_toml, runnable_name)
+
+
+def _sanitize_name(raw: str) -> str:
+    """Convert a directory name into a valid TOML key."""
+    import re
+
+    s = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
+    return s or "myscript"
+
+
+def _init_pyproject(path: Path, name: str) -> None:
+    """Add a runspec scaffold to pyproject.toml (create if absent)."""
+    if path.exists():
+        original = path.read_text(encoding="utf-8")
+        try:
+            data = _load_toml_file(path)
+        except Exception as e:
+            print(f"✗  Could not read {path.name}: {e}")
+            sys.exit(1)
+
+        if "runspec" in data.get("tool", {}):
+            existing = [k for k, v in data["tool"]["runspec"].items() if k != "config" and isinstance(v, dict)]
+            print(f"✗  {path.name} already has [tool.runspec] — already initialized")
+            if existing:
+                print(f"   Existing runnables: {', '.join(existing)}")
+            sys.exit(1)
+
+        content = original.rstrip("\n") + "\n\n" + _pyproject_block(name)
+    else:
+        original = None
+        content = _pyproject_block(name)
+
+    _write_and_verify(path, content, original)
+    action = "Updated" if original is not None else "Created"
+    print(f"  ✓  {action} {path.name} with [{name}] runnable")
+    print("     Run 'runspec check' to validate.")
+
+
+def _init_runspec_toml(path: Path, name: str) -> None:
+    """Create runspec.toml with a runspec scaffold."""
+    if path.exists():
+        print(f"✗  {path.name} already exists — already initialized")
+        print(f"   Edit {path.name} directly to add more runnables.")
+        sys.exit(1)
+
+    content = _runspec_toml_block(name)
+    _write_and_verify(path, content, None)
+    print(f"  ✓  Created {path.name} with [{name}] runnable")
+    print("     Run 'runspec check' to validate.")
+
+
+def _pyproject_block(name: str) -> str:
+    return (
+        f'[tool.runspec.{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[tool.runspec.{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n'
+    )
+
+
+def _runspec_toml_block(name: str) -> str:
+    return f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n'
+
+
+def _write_and_verify(path: Path, content: str, original: str | None) -> None:
+    """Write content, verify it parses as valid TOML, restore on failure."""
+    path.write_text(content, encoding="utf-8")
+    try:
+        _load_toml_file(path)
+    except Exception as e:
+        if original is not None:
+            path.write_text(original, encoding="utf-8")
+        else:
+            path.unlink(missing_ok=True)
+        print("✗  Generated invalid TOML — this is a bug, please report it")
+        print(f"   {e}")
+        sys.exit(1)
+
+
+def _load_toml_file(path: Path) -> dict[str, Any]:
+    """Read a TOML file using the stdlib or tomli fallback."""
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib  # type: ignore[no-redef]
+    with open(path, "rb") as f:
+        return tomllib.load(f)
 
 
 def cmd_emit(args: list[str]) -> None:
@@ -424,10 +528,15 @@ Usage:
   runspec <command> [options]
 
 Commands:
+  init        Create or update pyproject.toml or runspec.toml with a scaffold
   discover    Find all runspec-aware runnables in this environment
   check       Validate this project's runspec setup
   emit        Emit tool schemas for agent frameworks
   serve       Start the MCP stdio server for this environment
+
+Options for init:
+  --name      Runnable name (default: current directory name)
+  --file      Target file: pyproject or runspec (auto-detected if omitted)
 
 Options for discover:
   --format    Output format: text (default), json, mcp, openai, anthropic
@@ -437,6 +546,9 @@ Options for emit:
   --format    Output format: mcp (default), openai, anthropic
 
 Examples:
+  runspec init
+  runspec init --name myapp
+  runspec init --file runspec
   runspec discover
   runspec discover --format mcp
   runspec check

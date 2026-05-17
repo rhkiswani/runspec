@@ -1,12 +1,78 @@
 # CLI Reference
 
-The `runspec` binary ships with `pip install runspec`. It provides four
-commands for checking your config, discovering runnables, emitting agent
+The `runspec` binary ships with `pip install runspec`. It provides commands
+for scaffolding, checking your config, discovering runnables, emitting agent
 schemas, and running a live MCP server.
 
 ```
 runspec <command> [options]
 ```
+
+---
+
+## runspec init
+
+Scaffold a new runspec config in the current directory. Creates or updates
+`pyproject.toml` or `runspec.toml` with a starter runnable ready to fill in.
+
+```bash
+runspec init [--name <name>] [--file pyproject|runspec]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--name` | current directory name | Name for the initial runnable |
+| `--file` | auto-detected | Force a specific target file |
+
+### File selection
+
+`init` picks the right file automatically:
+
+- **`pyproject.toml` exists** — appends a `[tool.runspec.<name>]` block, preserving all existing content
+- **Neither file exists** — creates `runspec.toml`
+- **`--file pyproject`** — targets `pyproject.toml` regardless (creates it if absent)
+- **`--file runspec`** — targets `runspec.toml` regardless
+
+If the target file already has a runspec section, `init` exits with an error
+and lists the existing runnables — it will not overwrite or merge.
+
+### Example
+
+```bash
+# In a fresh project directory:
+runspec init --name deploy
+```
+
+Creates `runspec.toml`:
+
+```toml
+[deploy]
+description = "Describe what deploy does"
+autonomy    = "confirm"
+
+[deploy.args]
+# example = {type = "str", description = "An example argument"}
+```
+
+Adding to an existing Python project:
+
+```bash
+cd my-python-project   # pyproject.toml already exists
+runspec init --name process
+```
+
+Appends to `pyproject.toml`:
+
+```toml
+[tool.runspec.process]
+description = "Describe what process does"
+autonomy    = "confirm"
+
+[tool.runspec.process.args]
+# example = {type = "str", description = "An example argument"}
+```
+
+Then fill in the description, declare your args, and run `runspec check` to validate.
 
 ---
 
@@ -347,6 +413,9 @@ Restart=always
 The typical workflow for giving an agent access to your runnables:
 
 ```bash
+# 0. Scaffold a config (new projects)
+runspec init --name myapp
+
 # 1. Check your config is complete
 runspec check
 

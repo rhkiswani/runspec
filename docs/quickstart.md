@@ -18,6 +18,9 @@ pip install runspec
 
 ## 2. Choose your config format
 
+!!! tip "New project?"
+    Run `runspec init --name greet` to scaffold the config automatically, then fill in the details and continue from step 3.
+
 runspec supports two config formats. Use whichever fits your project.
 
 === "pyproject.toml"
@@ -265,5 +268,5 @@ This means:
 
 - [Format Reference](format.md) — every field, every option
 - [Python Library](python.md) — `parse()`, `load_spec()`, `RunSpec`, `Arg`
-- [CLI](cli.md) — `runspec check`, `runspec discover`, `runspec emit`
+- [CLI](cli.md) — `runspec init`, `runspec check`, `runspec discover`, `runspec emit`
 - [Agent Integration](agents.md) — wiring runspec into your agent framework
