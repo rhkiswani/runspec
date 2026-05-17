@@ -224,24 +224,93 @@ for tool in schemas["tools"]:
 
 ---
 
+## Live MCP server
+
+`runspec serve` starts a [Model Context Protocol](https://github.com/modelcontextprotocol/specification)
+stdio server that exposes every runnable in your environment as a callable
+tool. This is the recommended way to connect any MCP-compatible agent —
+Claude Desktop, Cursor, or your own agent loop — to your runnables.
+
+```bash
+runspec serve
+```
+
+The server reads your runspec config, advertises each runnable as an MCP tool,
+and runs the corresponding script when the agent calls it. No separate MCP
+server to write or maintain.
+
+### Connecting Claude Desktop
+
+Add an entry to `claude_desktop_config.json` — typically at
+`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS
+or `%APPDATA%\Claude\claude_desktop_config.json` on Windows:
+
+```json
+{
+  "mcpServers": {
+    "analytics-pipeline": {
+      "command": "/home/user/envs/analytics-pipeline/bin/runspec",
+      "args": ["serve"],
+      "cwd": "/home/user/projects/analytics"
+    }
+  }
+}
+```
+
+The key (`"analytics-pipeline"`) is the display name shown in Claude Desktop.
+`cwd` is the directory `serve` searches for your runspec config — set it to
+your project root.
+
+On Windows:
+```json
+{
+  "mcpServers": {
+    "analytics-pipeline": {
+      "command": "C:\\envs\\analytics-pipeline\\Scripts\\runspec.exe",
+      "args": ["serve"],
+      "cwd": "C:\\projects\\analytics"
+    }
+  }
+}
+```
+
+Each virtual environment is its own MCP server. If you have multiple projects,
+add one entry per environment — each exposes only its own runnables.
+
+### What the agent sees
+
+The agent receives tool definitions with full argument schemas, descriptions,
+and autonomy levels — everything from your TOML. Calling a tool runs the
+script and returns its stdout. On non-zero exit, the tool returns an error
+with the exit code, stdout, and stderr intact.
+
+### Agent-aware output
+
+Scripts called via `serve` receive `RUNSPEC_AGENT=1` in their environment.
+Read it through `args.__agent__` to switch between human and machine output:
+
+```python
+args = runspec.parse()
+
+if args.__agent__:
+    print(json.dumps({"status": "ok", "deployed_to": str(args.env)}))
+else:
+    print(f"✓ Deployed to {args.env}")
+```
+
+---
+
 ## Practical patterns
 
-### Give an agent a tool list
+### Start a live MCP server
 
 ```bash
-# Write once, use anywhere
-runspec emit --format mcp > tools.json
-
-# Or pipe directly
-runspec emit | your-mcp-server --tools-stdin
+# Start serving the current project's runnables
+runspec serve
 ```
 
-### Agent startup discovery
-
-```bash
-# Everything in this environment, one command
-runspec discover --format mcp | your-mcp-server --tools-stdin
-```
+Wire it into Claude Desktop once — every runnable in your config is
+immediately available as a tool.
 
 ### Validate before exposing
 
@@ -253,6 +322,16 @@ things that degrade agent behaviour.
 # .gitlab-ci.yml / GitHub Actions
 - name: Validate runspec
   run: runspec check
+```
+
+### Emit schemas for inspection
+
+```bash
+# Preview exactly what the agent will see
+runspec emit
+
+# Emit for a specific framework
+runspec emit --format openai
 ```
 
 ---

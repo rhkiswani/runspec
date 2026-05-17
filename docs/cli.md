@@ -1,8 +1,8 @@
 # CLI Reference
 
-The `runspec` binary ships with `pip install runspec`. It provides three
-commands for checking your config, discovering runnables, and emitting
-agent schemas.
+The `runspec` binary ships with `pip install runspec`. It provides four
+commands for checking your config, discovering runnables, emitting agent
+schemas, and running a live MCP server.
 
 ```
 runspec <command> [options]
@@ -227,6 +227,120 @@ the top-level wrapper:
 
 ---
 
+## runspec serve
+
+Start a live MCP stdio server for the current environment.
+
+```bash
+runspec serve
+```
+
+Reads the runspec config from the current directory, then starts a
+[Model Context Protocol](https://github.com/modelcontextprotocol/specification)
+server over stdin/stdout. The server exposes every runnable as an MCP tool.
+When an agent calls a tool, `serve` runs the corresponding script in the same
+virtual environment and streams back the output.
+
+Zero extra dependencies — the protocol is JSON-RPC 2.0 newline-delimited
+over stdin/stdout, which is plain stdlib.
+
+### Server name
+
+The server identifies itself by the virtual environment directory name:
+
+```
+/home/user/envs/analytics-pipeline/  →  server name: "analytics-pipeline"
+/home/user/envs/data-pipeline/       →  server name: "data-pipeline"
+```
+
+Override it in your config:
+
+```toml
+# runspec.toml or pyproject.toml [tool.runspec.config]
+[config]
+name = "my-pipeline"
+```
+
+### Connecting to Claude Desktop
+
+Add an entry to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "analytics-pipeline": {
+      "command": "/home/user/envs/analytics-pipeline/bin/runspec",
+      "args": ["serve"],
+      "cwd": "/home/user/projects/analytics"
+    }
+  }
+}
+```
+
+On Windows, use the `.exe` path:
+
+```json
+{
+  "mcpServers": {
+    "analytics-pipeline": {
+      "command": "C:\\envs\\analytics-pipeline\\Scripts\\runspec.exe",
+      "args": ["serve"],
+      "cwd": "C:\\projects\\analytics"
+    }
+  }
+}
+```
+
+`cwd` is the directory `serve` searches for your config file. Set it to your
+project root.
+
+### What the agent sees
+
+When a Claude (or any MCP-compatible agent) connects, it receives tool
+definitions for every runnable in your config — argument names, types,
+descriptions, required fields, and autonomy levels. Calling a tool runs the
+script and returns its stdout.
+
+If the script exits non-zero, the tool returns `isError: true` with the exit
+code, stdout, and stderr — so the agent has full context on what went wrong.
+
+The `RUNSPEC_AGENT=1` environment variable is set for every script invocation
+via `serve`. Your runnable can read this via `args.__agent__` to switch to
+machine-readable output:
+
+```python
+args = runspec.parse()
+
+if args.__agent__:
+    print(json.dumps({"status": "ok", "deployed_to": str(args.env)}))
+else:
+    print(f"✓ Deployed to {args.env}")
+```
+
+### Running as a service
+
+`serve` reads from stdin and writes to stdout — it stays alive until stdin
+closes. For persistent deployments, run it under a process supervisor:
+
+```ini
+# supervisord.conf
+[program:analytics-mcp]
+command=/home/user/envs/analytics-pipeline/bin/runspec serve
+directory=/home/user/projects/analytics
+autostart=true
+autorestart=true
+```
+
+```ini
+# systemd unit
+[Service]
+ExecStart=/home/user/envs/analytics-pipeline/bin/runspec serve
+WorkingDirectory=/home/user/projects/analytics
+Restart=always
+```
+
+---
+
 ## Usage in agent workflows
 
 The typical workflow for giving an agent access to your runnables:
@@ -235,24 +349,22 @@ The typical workflow for giving an agent access to your runnables:
 # 1. Check your config is complete
 runspec check
 
-# 2. See what would be emitted
+# 2. Preview what schemas will be emitted
 runspec emit
 
-# 3. Feed to an agent framework
-runspec emit --format mcp > tools.json
+# 3. Start the live MCP server
+runspec serve
 ```
 
-Or skip step 2 and pipe directly:
-
-```bash
-runspec emit | your-mcp-server --tools-stdin
-```
+To wire it into Claude Desktop, point the MCP server config at `runspec serve`
+(see above). The agent connects once at startup and calls tools as needed —
+no tool list files to maintain, no restart required when you add runnables.
 
 For a multi-project environment, `discover` emits everything at once:
 
 ```bash
-runspec discover --format mcp | your-mcp-server --tools-stdin
+runspec discover --format mcp
 ```
 
-An agent that can run `runspec discover` at startup sees every runspec-aware
-runnable installed in its environment — without any per-tool configuration.
+An agent that runs `discover` at startup sees every runspec-aware runnable
+installed in its environment — without any per-tool configuration.
