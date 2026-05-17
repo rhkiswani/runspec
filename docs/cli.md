@@ -61,7 +61,7 @@ runspec discover [--format text|json|mcp|openai|anthropic]
 Discovers runnables in two places:
 
 1. **Local** — searches up from the current directory for `pyproject.toml` or `runspec.toml`
-2. **Installed** — scans installed packages for runspec-aware entry points *(coming soon)*
+2. **Installed** — scans installed packages for runspec-aware entry points
 
 ### Formats
 

@@ -47,17 +47,7 @@ def cmd_discover(args: list[str]) -> None:
     """
     fmt = _get_flag(args, "--format", default="text")
 
-    discovered: list[dict[str, Any]] = []
-
-    # Check current directory
-    local = _discover_local()
-    if local:
-        discovered.extend(local)
-
-    # Check installed packages
-    installed = _discover_installed()
-    if installed:
-        discovered.extend(installed)
+    discovered = _deduplicate(_discover_local() + _discover_installed())
 
     if not discovered:
         print("No runspec-aware runnables found in this environment.")
@@ -272,24 +262,105 @@ def _discover_installed() -> list[dict[str, Any]]:
 
     discovered: list[dict[str, Any]] = []
 
-    for dist in meta.packages_distributions():
+    for dist in meta.distributions():
         try:
-            meta.metadata(dist)
-            # Check if package has runspec.toml as package data
-            # This is a simplified check — full implementation uses
-            # importlib.resources to look for the file
-            pass
+            items = _check_dist_files(dist)
+            if not items:
+                items = _check_editable_source(dist)
+            discovered.extend(items)
         except Exception:
             continue
 
     return discovered
 
 
+def _check_dist_files(dist: Any) -> list[dict[str, Any]]:
+    """
+    Strategy 1: look for runspec.toml shipped as package data.
+    Returns discovered items or [] if not found.
+    """
+    from runspec.loader import load_raw
+
+    if dist.files is None:
+        return []
+
+    for f in dist.files:
+        if f.name == "runspec.toml":
+            try:
+                config_path = Path(str(f.locate())).resolve()
+                raw = load_raw(config_path, "runspec")
+                if not raw["runnables"]:
+                    return []
+                return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
+            except Exception:
+                pass
+
+    return []
+
+
+def _check_editable_source(dist: Any) -> list[dict[str, Any]]:
+    """
+    Strategy 2: editable install — read direct_url.json to find the source
+    directory, then look for pyproject.toml with [tool.runspec] or runspec.toml.
+    Returns discovered items or [] if not applicable.
+    """
+    import json as _json
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+
+    from runspec.finder import find_config
+    from runspec.loader import load_raw
+
+    if dist.files is None:
+        return []
+
+    direct_url_file = next((f for f in dist.files if f.name == "direct_url.json"), None)
+    if direct_url_file is None:
+        return []
+
+    try:
+        data = _json.loads(direct_url_file.locate().read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    if not data.get("dir_info", {}).get("editable"):
+        return []
+
+    url = data.get("url", "")
+    if not url.startswith("file://"):
+        return []
+
+    source_dir = Path(url2pathname(urlparse(url).path)).resolve()
+    if not source_dir.is_dir():
+        return []
+
+    try:
+        config_path, fmt = find_config(source_dir)
+        raw = load_raw(config_path, fmt)
+        if not raw["runnables"]:
+            return []
+        return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
+    except FileNotFoundError:
+        return []
+
+
+def _deduplicate(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove duplicate (resolved_source_path, runnable_name) pairs."""
+    seen: set[tuple[str, str]] = set()
+    result: list[dict[str, Any]] = []
+    for item in items:
+        key = (str(Path(item["source"]).resolve()), item["runnable"])
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
 def _emit_all(discovered: list[dict[str, Any]], fmt: str) -> dict[str, Any]:
     """Emit all discovered runnables as a unified schema."""
     tools = []
     for item in discovered:
-        tool = _build_schema(item["script"], item["spec"], fmt)
+        tool = _build_schema(item["runnable"], item["spec"], fmt)
         tools.append(tool)
     return {"tools": tools}
 

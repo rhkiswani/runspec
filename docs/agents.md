@@ -145,11 +145,10 @@ schemas in one step.
 runspec discover --format mcp
 ```
 
-Today, `discover` finds runnables in the local project (searching up from
-the current directory). Scanning installed packages across the environment
-is coming in a future release — when it lands, an agent that runs
-`discover` at startup will automatically see every runspec-aware package
-installed in its Python environment with no per-tool configuration.
+`discover` searches both the local project (walking up from the current
+directory) and every installed package in the Python environment. An agent
+that runs `discover` at startup automatically sees every runspec-aware
+package with no per-tool configuration.
 
 ```
 Found 3 runspec-aware runnable(s):
