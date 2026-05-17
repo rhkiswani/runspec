@@ -20,6 +20,7 @@ nav:
   - Quick Start: quickstart.md
   - Format Reference: format.md
   - Python Library: python.md
+  - Node Library: node.md
   - CLI: cli.md
   - Agent Integration: agents.md
   - Changelog: changelog.md

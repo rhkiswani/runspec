@@ -8,9 +8,19 @@ All notable changes to runspec are documented here.
 
 ### Added
 
+**`runspec-node`** — full Node.js/TypeScript implementation of the runspec library.
+Install via `npm install runspec-node`. Ships with the same `parse()`, `loadSpec()`,
+`registerType()`, all five CLI commands (`init`, `check`, `discover`, `emit`, `serve`),
+and the MCP stdio server. Node 18, 20, and 22 supported.
+
+See the [Node Library](node.md) reference for full details.
+
+---
+
 **`runspec init`** — scaffold a runspec config in the current directory.
 Creates `runspec.toml` or appends `[tool.runspec.<name>]` to an existing
-`pyproject.toml`, preserving all existing content.
+`pyproject.toml`, preserving all existing content. Available in both the Python
+and Node packages.
 
 ```bash
 runspec init              # uses current directory name as the runnable name

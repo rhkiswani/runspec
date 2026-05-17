@@ -1,8 +1,8 @@
 # Quick Start
 
 !!! note "Python guide"
-    This guide uses Python. Node and Go quickstarts will be added when those
-    implementations are available.
+    This guide uses Python. For Node.js and TypeScript, see the [Node Library](node.md)
+    reference — the TOML format is identical, only the library call differs.
 
 Get from zero to a working runnable in five steps.
 

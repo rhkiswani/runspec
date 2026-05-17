@@ -7,14 +7,23 @@ Define your runnable's interface once in TOML. Get a CLI, validation,
 
 ## Install
 
-```bash
-pip install runspec
-```
+=== "Python"
+
+    ```bash
+    pip install runspec
+    ```
+
+=== "Node"
+
+    ```bash
+    npm install runspec-node
+    ```
 
 ## Define your interface
 
 !!! note "Python examples"
-    The examples below use Python. Node and Go examples are on the way.
+    The examples below use Python. See the [Node Library](node.md) page for
+    Node.js and TypeScript.
 
 ```toml
 [project.scripts]
@@ -61,7 +70,7 @@ That's it. runspec handles the rest.
 - **Agent-ready schemas** — emit all your runnables as tool schemas for AI agents with a single command
 - **Self-describing results** — parsed args carry their full spec metadata, enabling code generation, logging, and generic tooling without re-reading TOML
 - **Config validation** — `runspec check` catches problems in your TOML before your users do
-- **Language-agnostic** — the spec is TOML, implementations exist for multiple languages
+- **Language-agnostic** — the spec is TOML, implementations available for Python and Node.js
 
 ## For developers
 
