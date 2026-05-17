@@ -12,6 +12,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib  # type: ignore[no-redef]
+
 
 def find_config(start: Path | None = None) -> tuple[Path, str]:
     """
@@ -48,8 +53,6 @@ def find_script_name(config_path: Path, format: str) -> str | None:
 
     Returns the script name if found, None if it cannot be determined.
     """
-    import tomllib
-
     try:
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
@@ -77,8 +80,6 @@ def find_script_name(config_path: Path, format: str) -> str | None:
 
 def _has_runspec_section(pyproject_path: Path) -> bool:
     """Return True if pyproject.toml contains a [tool.runspec] section."""
-    import tomllib
-
     try:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)

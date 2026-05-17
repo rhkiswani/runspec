@@ -107,8 +107,8 @@ Bool must be checked before int (bool is a subclass of int in Python).
 
 ```bash
 # Requirements
-Python 3.11+   (uses tomllib from stdlib)
-Zero runtime dependencies
+Python 3.10+   (tomllib from stdlib on 3.11+; tomli dependency on 3.10)
+Zero runtime dependencies on Python 3.11+
 
 # Environment setup
 cd packages/python

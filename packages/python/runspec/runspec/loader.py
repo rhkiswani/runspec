@@ -18,9 +18,14 @@ Everything else at the top level is treated as a runnable.
 
 from __future__ import annotations
 
-import tomllib
+import sys
 from pathlib import Path
 from typing import Any
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib  # type: ignore[no-redef]
 
 
 def load_raw(config_path: Path, fmt: str) -> dict[str, Any]:
