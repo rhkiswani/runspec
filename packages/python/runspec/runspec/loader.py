@@ -70,7 +70,11 @@ def _normalise_config(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "autonomy_default": raw.get("autonomy-default", "confirm"),
         "lang": raw.get("lang"),
+        "name": raw.get("name"),
         "version": str(raw.get("version", "1")),
+        "registry": raw.get("registry"),
+        "heartbeat": int(raw.get("heartbeat", 30)),
+        "heartbeat_data": list(raw.get("heartbeat_data", [])),
     }
 
 

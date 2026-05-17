@@ -13,6 +13,9 @@ import os
 import subprocess
 import sys
 import sysconfig
+import threading
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -25,13 +28,13 @@ _ERR_METHOD_NOT_FOUND = -32601
 _ERR_INVALID_PARAMS = -32602
 
 
-def serve() -> None:
+def serve(registry_url: str | None = None, name: str | None = None) -> None:
     """
     Start the runspec MCP stdio server.
     Reads JSON-RPC requests from stdin, writes responses to stdout.
     Runs until stdin closes.
     """
-    from pathlib import Path as _Path
+    import signal
 
     from runspec.cli import _build_schema
     from runspec.finder import find_config
@@ -39,7 +42,7 @@ def serve() -> None:
     from runspec.loader import load_raw
 
     try:
-        config_path, fmt = find_config(_Path.cwd())
+        config_path, fmt = find_config(Path.cwd())
     except FileNotFoundError as e:
         sys.stderr.write(f"runspec serve: {e}\n")
         sys.stderr.flush()
@@ -51,15 +54,111 @@ def serve() -> None:
     tools: dict[str, dict[str, Any]] = {}
     arg_specs: dict[str, dict[str, Any]] = {}
 
-    for name, runnable in raw["runnables"].items():
+    for rname, runnable in raw["runnables"].items():
         inferred = infer_script(runnable, config["autonomy_default"])
-        tools[name] = _build_schema(name, inferred, "mcp")
-        arg_specs[name] = inferred.get("args", {})
+        tools[rname] = _build_schema(rname, inferred, "mcp")
+        arg_specs[rname] = inferred.get("args", {})
 
     scripts_dir = Path(sysconfig.get_path("scripts"))
-    server_name = _server_name(config)
 
-    _mcp_loop(tools, arg_specs, scripts_dir, server_name)
+    # Resolve effective name and registry URL (CLI flags override config)
+    effective_name = name or _server_name(config)
+    effective_registry = registry_url or config.get("registry")
+
+    if effective_registry:
+        agent_id = str(uuid.uuid4())
+        start_time = time.time()
+        tools_list = list(tools.values())
+        heartbeat_interval = config.get("heartbeat", 30)
+        heartbeat_data_fields: list[str] = config.get("heartbeat_data", [])
+
+        try:
+            _registry_register(effective_registry, agent_id, effective_name, config["version"])
+        except Exception as e:
+            sys.stderr.write(f"runspec serve: registry register failed: {e}\n")
+            sys.stderr.flush()
+
+        def _on_sigterm(signum: int, frame: Any) -> None:
+            try:
+                _registry_deregister(effective_registry, agent_id)
+            except Exception:
+                pass
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, _on_sigterm)
+
+        def _heartbeat_loop() -> None:
+            while True:
+                time.sleep(heartbeat_interval)
+                try:
+                    status = _registry_heartbeat(
+                        effective_registry, agent_id, heartbeat_data_fields, start_time
+                    )
+                    if status == "refresh":
+                        _registry_tools(effective_registry, agent_id, tools_list)
+                except Exception as e:
+                    sys.stderr.write(f"runspec serve: heartbeat error: {e}\n")
+                    sys.stderr.flush()
+
+        threading.Thread(target=_heartbeat_loop, daemon=True).start()
+
+    _mcp_loop(tools, arg_specs, scripts_dir, effective_name)
+
+
+# ── Registry client ────────────────────────────────────────────────────────────
+
+
+def _registry_register(base_url: str, agent_id: str, name: str, version: str) -> None:
+    _registry_post(base_url, "/register", {
+        "agent_id": agent_id,
+        "name": name,
+        "version": version,
+        "tools_seq": 1,
+    })
+
+
+def _registry_heartbeat(
+    base_url: str,
+    agent_id: str,
+    heartbeat_data_fields: list[str],
+    start_time: float,
+) -> str:
+    body: dict[str, Any] = {"agent_id": agent_id, "tools_seq": 1}
+    if "system" in heartbeat_data_fields:
+        body["system"] = {"pid": os.getpid(), "uptime": int(time.time() - start_time)}
+    resp = _registry_post(base_url, "/heartbeat", body)
+    return resp.get("status", "ack")
+
+
+def _registry_tools(base_url: str, agent_id: str, tools_list: list[dict[str, Any]]) -> None:
+    _registry_post(base_url, "/tools", {
+        "agent_id": agent_id,
+        "tools_seq": 1,
+        "tools": tools_list,
+    })
+
+
+def _registry_deregister(base_url: str, agent_id: str) -> None:
+    _registry_post(base_url, "/deregister", {"agent_id": agent_id})
+
+
+def _registry_post(base_url: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    import urllib.error
+    import urllib.request
+
+    url = base_url.rstrip("/") + path
+    payload = json.dumps(body).encode()
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        raise RuntimeError(f"HTTP {e.code} from {url}: {err_body}") from e
+    except Exception as e:
+        raise RuntimeError(f"Request to {url} failed: {e}") from e
 
 
 # ── MCP loop ──────────────────────────────────────────────────────────────────

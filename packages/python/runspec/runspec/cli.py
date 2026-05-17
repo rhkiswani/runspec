@@ -136,7 +136,9 @@ def cmd_serve(args: list[str]) -> None:
     """Start the MCP stdio server for this environment."""
     from runspec.serve import serve
 
-    serve()
+    registry_url = _get_flag(args, "--registry")
+    name = _get_flag(args, "--name")
+    serve(registry_url=registry_url, name=name)
 
 
 def cmd_init(args: list[str]) -> None:
@@ -533,6 +535,10 @@ Commands:
   check       Validate this project's runspec setup
   emit        Emit tool schemas for agent frameworks
   serve       Start the MCP stdio server for this environment
+
+Options for serve:
+  --registry  Registry base URL (overrides [config] registry)
+  --name      Agent name reported to registry (overrides [config] name)
 
 Options for init:
   --name      Runnable name (default: current directory name)
