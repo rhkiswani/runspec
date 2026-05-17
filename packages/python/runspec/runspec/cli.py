@@ -30,6 +30,7 @@ def main() -> None:
         "discover": cmd_discover,
         "check": cmd_check,
         "emit": cmd_emit,
+        "serve": cmd_serve,
     }
 
     if command not in commands:
@@ -128,6 +129,13 @@ def cmd_check(args: list[str]) -> None:
         sys.exit(1)
     elif not warnings:
         print("\n  All checks passed.")
+
+
+def cmd_serve(args: list[str]) -> None:
+    """Start the MCP stdio server for this environment."""
+    from runspec.serve import serve
+
+    serve()
 
 
 def cmd_emit(args: list[str]) -> None:
@@ -418,6 +426,7 @@ Commands:
   discover    Find all runspec-aware runnables in this environment
   check       Validate this project's runspec setup
   emit        Emit tool schemas for agent frameworks
+  serve       Start the MCP stdio server for this environment
 
 Options for discover:
   --format    Output format: text (default), json, mcp, openai, anthropic
