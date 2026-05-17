@@ -194,6 +194,7 @@ def _build_schema(name: str, script: dict[str, Any], fmt: str) -> dict[str, Any]
         "name": name,
         "description": script.get("description") or "",
         "x-autonomy": script.get("autonomy", "confirm"),
+        "x-output": script.get("output", "text"),
         "inputSchema": {
             "type": "object",
             "properties": properties,

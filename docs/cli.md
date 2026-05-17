@@ -208,6 +208,7 @@ Every emitted tool includes:
 | `description` | `description` field — shown to agents |
 | `x-autonomy` | Effective autonomy level |
 | `x-autonomy-reason` | `autonomy-reason` field, if declared |
+| `x-output` | `output` field — `"text"` if not declared |
 | `inputSchema` | JSON Schema for all args |
 
 The `x-autonomy` extension field is how agents know whether they need to

@@ -352,6 +352,7 @@ extra documentation:
 | `args[].env` | Knows there's an env var fallback |
 | `x-autonomy` | Decides whether to run or ask first |
 | `x-autonomy-reason` | Explains to the user why confirmation is needed |
+| `x-output` | Knows whether to display output as text or parse it as JSON |
 
 The more of these you fill in, the more reliably an agent can use your
 runnable without human help.

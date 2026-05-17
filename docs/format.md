@@ -79,6 +79,23 @@ The name you choose is the command users type.
 description     = "Deploy to production"       # recommended
 autonomy        = "manual"                     # optional
 autonomy-reason = "Irreversible operation"     # optional
+output          = "text"                       # optional
+```
+
+### Output
+
+Declares what the runnable writes to stdout. Agent frameworks and
+`runspec serve` use this to interpret the tool's response.
+
+| Value | Meaning |
+|---|---|
+| `text` | Human-readable output (default) |
+| `json` | Structured JSON — agent can parse and act on the response |
+| `html` | HTML output (reserved for future UI use) |
+
+```toml
+[process]
+output = "json"   # agent can parse stdout as structured data
 ```
 
 ### Autonomy Levels

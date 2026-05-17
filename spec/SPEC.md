@@ -70,7 +70,21 @@ or at the top level of `runspec.toml`. The reserved name `config` is excluded.
 description     = "Human and agent readable description"  # recommended
 autonomy        = "confirm"                               # optional
 autonomy-reason = "Why this level was chosen"             # optional
+output          = "text"                                  # optional
 ```
+
+### `output`
+
+Declares what the runnable writes to stdout. Used by agent frameworks and the
+`runspec serve` layer to interpret the tool's response.
+
+| Value | Meaning |
+|---|---|
+| `text` | Human-readable output (default) |
+| `json` | Structured JSON — agent can parse and act on the response |
+| `html` | HTML output (reserved for future UI use) |
+
+Default when unspecified: `"text"`.
 
 ### Reserved Names
 
@@ -276,6 +290,7 @@ When emitting to agent formats, implementations must include:
 - `description` — runnable description
 - `x-autonomy` — autonomy level
 - `x-autonomy-reason` — reason if provided
+- `x-output` — output type (`"text"` if not declared)
 - `inputSchema` — JSON Schema object of all arguments
 
 ---
