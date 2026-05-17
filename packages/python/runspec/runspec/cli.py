@@ -337,7 +337,7 @@ Options for discover:
   --format    Output format: text (default), json, mcp, openai, anthropic
 
 Options for emit:
-  --name      Runnable name to emit (all runnables if omitted)
+  --script    Runnable name to emit (all runnables if omitted)
   --format    Output format: mcp (default), openai, anthropic
 
 Examples:
