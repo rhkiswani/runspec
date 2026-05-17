@@ -12,7 +12,7 @@ from runspec.models import Arg, Group, RunSpec
 from runspec.parser import load_spec, parse
 from runspec.types import register_type
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = [
     "parse",
     "load_spec",
