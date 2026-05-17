@@ -138,27 +138,28 @@ print(args.__autonomy__)   # "manual" if api-key was provided
 
 ## Discovery
 
-`runspec discover` finds every runspec-aware runnable in the current
-environment — not just the local project.
+`runspec discover` finds runspec-aware runnables and emits them as tool
+schemas in one step.
 
 ```bash
 runspec discover --format mcp
 ```
 
-This is the agent startup pattern: one command, all tools, no per-tool
-configuration. An agent that runs this at startup automatically sees every
-runspec-aware package installed in its Python environment.
+Today, `discover` finds runnables in the local project (searching up from
+the current directory). Scanning installed packages across the environment
+is coming in a future release — when it lands, an agent that runs
+`discover` at startup will automatically see every runspec-aware package
+installed in its Python environment with no per-tool configuration.
 
 ```
-Found 4 runspec-aware runnable(s):
+Found 3 runspec-aware runnable(s):
 
   /home/user/project/pyproject.toml
     • deploy
     • process
     • validate
 
-  /home/user/.venv/lib/python3.12/site-packages/datatool/pyproject.toml
-    • convert
+Run 'runspec discover --format mcp' to emit MCP tool schemas.
 ```
 
 With `--format mcp`, this becomes a complete tool list ready to hand to

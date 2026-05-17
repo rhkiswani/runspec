@@ -121,8 +121,7 @@ greet
 
 ```
 ✗  Missing required argument: --name
-   'name' is required and has no default.
-   Usage: greet --name <str>
+   Type: str
 ```
 
 **Wrong type:**
@@ -132,7 +131,7 @@ greet --name Alice --times abc
 ```
 
 ```
-✗  Invalid value for --times: 'abc' is not a valid int
+✗  Cannot coerce value 'abc' to type 'int' for argument '--times': invalid literal for int() with base 10: 'abc'
 ```
 
 No argument parsing code. No error handling. Just your runnable and a TOML file.

@@ -224,7 +224,7 @@ environment variables:
     ```yaml
     # .gitlab-ci.yml — shared across all projects
     deploy:
-      script: deploy --dry-run $DRY_RUN
+      script: deploy
     ```
 
     In **Project → Settings → CI/CD → Variables**, set:
@@ -234,6 +234,8 @@ environment variables:
     DEPLOY_API_KEY = <secret>
     AWS_REGION     = eu-west-1
     ```
+
+    No args on the command line. Each project's variables supply everything.
 
 === "GitHub Actions"
 

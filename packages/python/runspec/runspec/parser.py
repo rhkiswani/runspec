@@ -302,7 +302,10 @@ def _coerce_values(
             result[norm] = (None, "default")
             continue
         source = _determine_source(norm, parsed)
-        coerced = coerce(value, spec)
+        try:
+            coerced = coerce(value, spec)
+        except (ValueError, TypeError) as e:
+            raise errors.RunSpecError(f"✗  {e}") from e
         result[norm] = (coerced, source)
     return result
 
