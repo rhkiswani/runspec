@@ -115,8 +115,7 @@ HELLO, ALICE!
 **Explore your setup with the runspec CLI:**
 
 ```bash
-runspec check        # validates your config and reports any issues
-runspec discover     # finds all runspec-aware runnables in your environment
+runspec local        # lists installed runnables and reports any config issues
 ```
 
 ---
@@ -204,7 +203,7 @@ The four autonomy levels are:
 Emit your runnables as an AI agent tool schema with a single command:
 
 ```bash
-runspec emit --format mcp
+runspec local --format mcp
 ```
 
 ```json
@@ -253,11 +252,11 @@ Every runspec-aware package installed in your environment is automatically
 discoverable. No integration code. No hand-written tool definitions.
 
 ```bash
-runspec discover          # find every runspec-aware runnable installed here
-runspec emit --format mcp # emit all of them as agent-ready tool schemas
+runspec local                  # find every installed runspec-aware runnable
+runspec local --format mcp     # emit all of them as agent-ready tool schemas
 ```
 
-Install a new runspec-aware package and it appears in `runspec discover`
+Install a new runspec-aware package and it appears in `runspec local`
 automatically. Your agent's toolbox grows with every `pip install` — zero
 glue code required.
 
@@ -265,8 +264,8 @@ This means:
 
 - **Developers** define their interface once in TOML — they get a CLI,
   `--help`, validation, and agent schemas all from the same source
-- **Agents** run `runspec discover` to find what's available, then
-  `runspec emit` to get the schemas — no `skills.md`, no manual registration
+- **Agents** run `runspec local --format mcp` to get all schemas — no
+  `skills.md`, no manual registration
 - **Users** install packages and everything just works
 
 ---
@@ -275,5 +274,5 @@ This means:
 
 - [Format Reference](format.md) — every field, every option
 - [Python Library](python.md) — `parse()`, `load_spec()`, `RunSpec`, `Arg`
-- [CLI](cli.md) — `runspec init`, `runspec check`, `runspec discover`, `runspec emit`
+- [CLI](cli.md) — `runspec init`, `runspec local`, `runspec serve`, `runspec jump`
 - [Agent Integration](agents.md) — wiring runspec into your agent framework

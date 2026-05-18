@@ -38,7 +38,7 @@ Implementations must use the following lookup strategy depending on context:
 3. Aggregate all runnables from all found configs into a unified tool list
 4. If no `.git/` found, use cwd as the project root
 
-**Single-package commands (`runspec run`, `check`, `emit`):**
+**Single-package commands (`runspec local`, `runspec jump`):**
 1. Walk up from cwd, return the first `runspec.toml` found
 
 ---
@@ -101,7 +101,7 @@ Default when unspecified: `"text"`.
 ### Reserved Names
 
 `config` is the only reserved name. A runnable cannot be named `config`.
-`runspec check` will report an error if this name is used.
+`runspec local` will report an error if this name is used.
 
 ### Autonomy Levels
 
@@ -118,7 +118,7 @@ Default when unspecified: value of `[config] autonomy-default`, else `"confirm"`
 
 ## Remote Execution
 
-These fields control how `runspec exec` and compatible SSH clients run the tool on a remote host.
+These fields control how `runspec jump` and compatible SSH clients run the tool on a remote host.
 
 ### `hosts`
 
@@ -171,7 +171,7 @@ Forms 3 and 4 may be combined. Resolution order:
 An empty string (`""`) explicitly means no privilege escalation for that host or pattern.
 
 Invalid regex patterns cause `runspec serve` to exit with a clear error at startup.
-`runspec check` also validates all patterns at check time.
+`runspec local` also validates all patterns at startup.
 
 `runspec serve` resolves `run_as` to a plain string before sending it to the registry.
 The registry stores only the resolved value per instance — the table form never leaves
@@ -310,9 +310,9 @@ For every argument, implementations must resolve the value in this order:
 
 ## Runtime Environment Variables
 
-When `runspec serve` executes a tool, or when `runspec run` runs a tool locally,
-all resolved argument values are injected as environment variables before the
-process starts. This makes any runnable language — bash, Python, Node, or anything
+When `runspec serve` executes a tool locally, or when `runspec jump` runs a tool
+on a jump box, all resolved argument values are injected as environment variables
+before the process starts. This makes any runnable language — bash, Python, Node, or anything
 else — work without a language-specific library.
 
 ### Naming convention

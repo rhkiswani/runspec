@@ -278,8 +278,8 @@ for name, arg in spec._args.items():
     print(f"{name}: {arg.type} (required={arg.required})")
 ```
 
-This is what `runspec emit` uses internally — load the spec, then serialise
-to JSON.
+This is what `runspec local --format mcp` uses internally — load the spec,
+then serialise to JSON.
 
 ---
 

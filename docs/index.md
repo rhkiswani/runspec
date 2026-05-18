@@ -64,10 +64,10 @@ That's it. runspec handles the rest.
 - **Inference** — types and required flags are inferred from defaults where possible
 - **Built-in `--help`** — usage and argument descriptions generated automatically, no code required
 - **Autonomy control** — declare how much trust AI agents should have when running each runnable, from `autonomous` to `manual`
-- **Automatic discovery** — any runspec-aware package installed in your environment is instantly findable with `runspec discover`
+- **Automatic discovery** — any runspec-aware package installed in your environment is instantly findable with `runspec local`
 - **Agent-ready schemas** — emit all your runnables as tool schemas for AI agents with a single command
 - **Self-describing results** — parsed args carry their full spec metadata, enabling code generation, logging, and generic tooling without re-reading TOML
-- **Config validation** — `runspec check` catches problems in your TOML before your users do
+- **Config validation** — `runspec local` catches problems in your TOML before your users do
 - **Language-agnostic** — the spec is TOML, implementations available for Python and Node.js
 
 ## For developers
@@ -77,13 +77,13 @@ CLI with no argument parsing code written.
 
 ## For AI agents
 
-Once an agent knows to run `runspec discover`, every runspec-aware runnable
+Once an agent knows to run `runspec local`, every runspec-aware runnable
 installed in the environment is available — no registration, no hand-written
 tool definitions.
 
 ```bash
-runspec discover          # find every runspec-aware runnable in this environment
-runspec emit --format mcp # emit all of them as agent-ready tool schemas
+runspec local                  # find every installed runspec-aware runnable
+runspec local --format mcp     # emit all of them as agent-ready tool schemas
 ```
 
 Every `pip install` of a runspec-aware package is a new capability.

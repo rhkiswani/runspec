@@ -13,6 +13,7 @@ from runspec.serve import (
     MCP_PROTOCOL_VERSION,
     _args_to_argv,
     _dispatch,
+    _expand_tools,
     _find_script,
     _handle_initialize,
     _handle_tools_call,
@@ -220,59 +221,106 @@ def test_find_script_exe_in_scripts_dir(tmp_path):
     assert _find_script("deploy", tmp_path) == [str(script)]
 
 
-def test_find_script_toml_dir_fallback(tmp_path):
-    scripts_dir = tmp_path / "venv_scripts"
-    scripts_dir.mkdir()
-    toml_dir = tmp_path / "mypkg"
-    toml_dir.mkdir()
-    script = toml_dir / "greet"
-    script.touch()
-    assert _find_script("greet", scripts_dir, toml_dir) == [str(script)]
-
-
-def test_find_script_toml_dir_py_fallback(tmp_path):
-    import sys
-    scripts_dir = tmp_path / "venv_scripts"
-    scripts_dir.mkdir()
-    toml_dir = tmp_path / "mypkg"
-    toml_dir.mkdir()
-    py_script = toml_dir / "greet.py"
-    py_script.touch()
-    assert _find_script("greet", scripts_dir, toml_dir) == [sys.executable, str(py_script)]
-
-
-def test_find_script_toml_dir_sh_fallback(tmp_path):
-    scripts_dir = tmp_path / "venv_scripts"
-    scripts_dir.mkdir()
-    toml_dir = tmp_path / "mypkg"
-    toml_dir.mkdir()
-    sh_script = toml_dir / "greet.sh"
-    sh_script.touch()
-    assert _find_script("greet", scripts_dir, toml_dir) == [str(sh_script)]
-
-
-def test_find_script_venv_takes_priority_over_toml_dir(tmp_path):
-    scripts_dir = tmp_path / "venv_scripts"
-    scripts_dir.mkdir()
-    venv_script = scripts_dir / "deploy"
-    venv_script.touch()
-    toml_dir = tmp_path / "mypkg"
-    toml_dir.mkdir()
-    (toml_dir / "deploy").touch()
-    assert _find_script("deploy", scripts_dir, toml_dir) == [str(venv_script)]
-
-
-def test_find_script_no_fallback_without_toml_dir(tmp_path):
-    scripts_dir = tmp_path / "venv_scripts"
-    scripts_dir.mkdir()
-    pkg_dir = tmp_path / "mypkg"
-    pkg_dir.mkdir()
-    (pkg_dir / "greet").touch()
-    assert _find_script("greet", scripts_dir) is None
-
 
 def test_find_script_missing(tmp_path):
     assert _find_script("missing", tmp_path) is None
+
+
+# ── _expand_tools ─────────────────────────────────────────────────────────────
+
+_LEAF_INFERRED = {
+    "description": "Do a thing",
+    "autonomy": "confirm",
+    "output": "text",
+    "args": {"env": {"type": "str", "required": True}},
+    "commands": {},
+}
+
+
+def test_expand_tools_no_commands():
+    entries = _expand_tools("greet", _LEAF_INFERRED, ["/bin/greet"], None, "sudo", None)
+    assert len(entries) == 1
+    flat_name, schema, arg_spec, exec_spec = entries[0]
+    assert flat_name == "greet"
+    assert schema["name"] == "greet"
+    assert exec_spec["command"] == ["/bin/greet"]
+
+
+def test_expand_tools_one_level():
+    inferred = {
+        "description": "Pipeline tool",
+        "autonomy": "confirm",
+        "output": "text",
+        "args": {},
+        "commands": {
+            "run": _LEAF_INFERRED,
+            "validate": {**_LEAF_INFERRED, "description": "Validate"},
+        },
+    }
+    entries = _expand_tools("pipeline", inferred, ["/bin/pipeline"], None, "sudo", None)
+    names = [e[0] for e in entries]
+    assert names == ["pipeline_run", "pipeline_validate"]
+    _, _, _, exec_spec_run = entries[0]
+    assert exec_spec_run["command"] == ["/bin/pipeline", "run"]
+    _, _, _, exec_spec_val = entries[1]
+    assert exec_spec_val["command"] == ["/bin/pipeline", "validate"]
+
+
+def test_expand_tools_two_levels():
+    get_list = {**_LEAF_INFERRED, "description": "List orders", "args": {"limit": {"type": "int"}}}
+    post_sale = {**_LEAF_INFERRED, "description": "Post a sale", "args": {"amount": {"type": "int", "required": True}}}
+    orders_endpoint = {
+        "description": "Orders endpoint",
+        "autonomy": "confirm",
+        "output": "text",
+        "args": {},
+        "commands": {"get_list": get_list, "post_sale": post_sale},
+    }
+    portal_api = {
+        "description": "Portal API",
+        "autonomy": "confirm",
+        "output": "text",
+        "args": {},
+        "commands": {"orders_endpoint": orders_endpoint},
+    }
+    entries = _expand_tools("portal_api", portal_api, ["/bin/portal_api"], None, "sudo", None)
+    names = [e[0] for e in entries]
+    assert "portal_api_orders_endpoint_get_list" in names
+    assert "portal_api_orders_endpoint_post_sale" in names
+    # Command prefix includes both subcommand levels
+    by_name = {e[0]: e for e in entries}
+    _, _, _, exec_get = by_name["portal_api_orders_endpoint_get_list"]
+    assert exec_get["command"] == ["/bin/portal_api", "orders_endpoint", "get_list"]
+    _, _, arg_spec_post, exec_post = by_name["portal_api_orders_endpoint_post_sale"]
+    assert exec_post["command"] == ["/bin/portal_api", "orders_endpoint", "post_sale"]
+    assert "amount" in arg_spec_post
+
+
+def test_expand_tools_none_command_propagated():
+    entries = _expand_tools("greet", _LEAF_INFERRED, None, None, "sudo", None)
+    _, _, _, exec_spec = entries[0]
+    assert exec_spec["command"] is None
+
+
+def test_expand_tools_run_as_propagated_to_leaves():
+    inferred = {
+        "description": "root",
+        "autonomy": "confirm",
+        "output": "text",
+        "args": {},
+        "commands": {"sub": _LEAF_INFERRED},
+    }
+    entries = _expand_tools("tool", inferred, ["/bin/tool"], "oracle", "sudo", "-H")
+    _, _, _, exec_spec = entries[0]
+    assert exec_spec["run_as"] == "oracle"
+    assert exec_spec["become_flags"] == "-H"
+
+
+def test_expand_tools_leaf_schema_has_args():
+    entries = _expand_tools("greet", _LEAF_INFERRED, ["/bin/greet"], None, "sudo", None)
+    _, schema, arg_spec, _ = entries[0]
+    assert "env" in schema["inputSchema"]["properties"]
+    assert "env" in arg_spec
 
 
 # ── _server_name ──────────────────────────────────────────────────────────────

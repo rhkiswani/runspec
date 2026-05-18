@@ -4,6 +4,51 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.7.0 — 2026-05-18
+
+### Changed
+
+**CLI renamed.** `discover` → `local`, `run` → `jump`. The `check` and `emit`
+commands are absorbed into `local`.
+
+**`runspec local`** lists every installed runspec-aware runnable with inline
+validation, and exits with code 1 if any errors are found — usable as a CI
+check. Schema emission is via `--format`:
+
+```bash
+runspec local                        # text listing + validation
+runspec local --format mcp           # emit MCP tool schemas
+runspec local --format mcp --script deploy   # single runnable
+```
+
+**`runspec jump`** replaces `runspec run`. Without a tool name, it queries the
+registry and lists available tools and hosts. With a tool name and `--host`, it
+SSHes to the jump box and runs the tool — everything after `--` goes to the
+remote command:
+
+```bash
+runspec jump                                        # list from [config] registry
+runspec jump --registry http://registry:8080       # list from explicit registry
+runspec jump deploy --host jumpbox-01 -- --env prod
+```
+
+**Subcommand flattening in `runspec serve`.** Runnables with nested `.commands`
+are expanded into flat MCP tools with underscore-joined names:
+
+```toml
+[portal-api.commands.orders.commands.get-list]
+description = "List orders"
+```
+
+Becomes MCP tool `portal-api_orders_get-list`. The command path is prepended
+to argv at invocation time.
+
+**Script discovery in `runspec serve`** is now venv-bin only. Scripts must be
+installed (`pip install` or `pip install -e .`). The previous fallback that
+searched the TOML directory and guessed file extensions has been removed.
+
+---
+
 ## 0.6.0 — 2026-05-18
 
 ### Changed

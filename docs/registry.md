@@ -2,7 +2,7 @@
 
 A lightweight HTTP registry for runspec agents.
 
-When `runspec serve` starts on a host it registers itself here. The registry tracks which tools are available, on which hosts, and with what execution metadata. Clients (Chainlit apps, orchestrators, CI pipelines) query the registry to discover agents and route `runspec run` calls.
+When `runspec serve` starts on a host it registers itself here. The registry tracks which tools are available, on which hosts, and with what execution metadata. Clients (Chainlit apps, orchestrators, CI pipelines) query the registry to discover agents and route `runspec jump` calls.
 
 ## Install
 
@@ -107,8 +107,8 @@ runspec-registry --api-key mysecretkey
 # Agents register with the matching key
 runspec serve --registry http://myserver:8765 --registry-key mysecretkey
 
-# runspec run also accepts the key
-runspec run deploy --host prod-01 --registry http://myserver:8765 --registry-key mysecretkey
+# runspec jump also accepts the key
+runspec jump deploy --host prod-01 --registry http://myserver:8765 --registry-key mysecretkey
 ```
 
 ## TLS
@@ -136,9 +136,9 @@ heartbeat_data = ["system"]   # includes pid and uptime
 ## How it fits together
 
 ```
-runspec serve          →  registers + heartbeats  →  runspec-registry
-runspec run --host …   →  queries /tools/{name}   →  runspec-registry
-                       →  SSHes to host and runs the tool
+runspec serve           →  registers + heartbeats  →  runspec-registry
+runspec jump --host …   →  queries /tools/{name}   →  runspec-registry
+                        →  SSHes to jump box and runs the tool
 ```
 
 The registry is stateless between restarts — agents re-register on their next heartbeat cycle, so a registry restart is non-disruptive.

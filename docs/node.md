@@ -280,18 +280,17 @@ The `runspec` binary is included in `runspec-node`. Use it via `npx` in any proj
 that has `runspec-node` installed:
 
 ```bash
-npx runspec init              # scaffold runspec.toml
-npx runspec check             # validate your runspec config
-npx runspec discover          # find all runspec-aware runnables here
-npx runspec emit --format mcp # emit MCP tool schemas
-npx runspec serve             # start the MCP stdio server
+npx runspec init                   # scaffold runspec.toml + code stub
+npx runspec local                  # list installed runnables and validate config
+npx runspec local --format mcp     # emit MCP tool schemas
+npx runspec serve                  # start the MCP stdio server
 ```
 
 Or install globally for direct access:
 
 ```bash
 npm install -g runspec-node
-runspec check
+runspec local
 ```
 
 The CLI is identical to the Python version and reads the same `runspec.toml` format.

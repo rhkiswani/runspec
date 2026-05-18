@@ -191,7 +191,7 @@ Content-Type: application/json
 }
 ```
 
-The `tools` array is identical to the output of `runspec emit --format mcp`
+The `tools` array is identical to the output of `runspec local --format mcp`
 for this project. The registry can cache it and serve it to discovery clients.
 
 ### Response

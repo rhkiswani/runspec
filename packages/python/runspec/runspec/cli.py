@@ -2,9 +2,10 @@
 cli.py — The runspec command-line interface.
 
 Commands:
-    runspec discover [--format mcp|openai|anthropic|json]
-    runspec check
-    runspec emit --script <name> [--format mcp|openai|anthropic]
+    runspec init    [--name <name>] [--lang python|typescript|javascript]
+    runspec local   [--format text|json|mcp|openai|anthropic] [--script <name>]
+    runspec serve   [--dev] [--registry <url>] [--name <name>] ...
+    runspec jump    [<tool>] [--host <host>] [--registry <url>] [-- tool-args...]
 """
 
 from __future__ import annotations
@@ -28,11 +29,9 @@ def main() -> None:
 
     commands = {
         "init": cmd_init,
-        "discover": cmd_discover,
-        "check": cmd_check,
-        "emit": cmd_emit,
+        "local": cmd_local,
         "serve": cmd_serve,
-        "run": cmd_run,
+        "jump": cmd_jump,
     }
 
     if command not in commands:
@@ -43,22 +42,24 @@ def main() -> None:
     commands[command](rest)
 
 
-def cmd_discover(args: list[str]) -> None:
-    """
-    Discover all runspec-aware runnables in the current environment.
-    Checks installed packages and the current directory.
-    """
+def cmd_local(args: list[str]) -> None:
+    """List installed runnables with inline validation, or emit schemas."""
     fmt = _get_flag(args, "--format", default="text")
+    script_name = _get_flag(args, "--script")
 
-    discovered = _deduplicate(_discover_local() + _discover_installed())
+    discovered = _deduplicate(_discover_installed())
+
+    if script_name:
+        discovered = [d for d in discovered if d["runnable"] == script_name]
 
     if not discovered:
         print("No runspec-aware runnables found in this environment.")
-        print("Create a runspec.toml inside your package directory and run 'runspec init' to get started.")
+        print("Install a package that declares 'runspec' as a dependency,")
+        print("or run 'pip install -e .' from your project directory.")
         return
 
     if fmt == "text":
-        _print_discover_text(discovered)
+        _print_local_text(discovered)
     elif fmt == "json":
         print(json.dumps(discovered, indent=2, default=str))
     elif fmt in ("mcp", "openai", "anthropic"):
@@ -68,70 +69,6 @@ def cmd_discover(args: list[str]) -> None:
         print(f"✗  Unknown format: {fmt}")
         print("   Available formats: text, json, mcp, openai, anthropic")
         sys.exit(1)
-
-
-def cmd_check(args: list[str]) -> None:
-    """
-    Validate the current project's runspec setup.
-    """
-    from runspec.finder import find_config
-    from runspec.loader import load_raw
-
-    try:
-        config_path = find_config(Path.cwd())
-    except FileNotFoundError as e:
-        print(str(e))
-        sys.exit(1)
-
-    raw = load_raw(config_path)
-    errors: list[str] = []
-    warnings: list[str] = []
-    ok: list[str] = []
-
-    # Check config file found
-    ok.append(f"Config found: {config_path}")
-
-    # Check for reserved name
-    if "config" in raw["runnables"]:
-        errors.append("'config' is a reserved name — rename your runnable to something else")
-
-    # Check each runnable
-    for runnable_name, runnable in raw["runnables"].items():
-        if not runnable.get("description"):
-            warnings.append(f"'{runnable_name}' has no description — agents won't know what it does")
-        else:
-            ok.append(f"'{runnable_name}' — description present")
-
-        if not runnable.get("autonomy"):
-            warnings.append(f"'{runnable_name}' autonomy not declared — will default to '{raw['config']['autonomy_default']}'")
-        else:
-            ok.append(f"'{runnable_name}' — autonomy: {runnable['autonomy']}")
-
-        # Validate run_as patterns
-        run_as = runnable.get("run_as")
-        if isinstance(run_as, dict):
-            from runspec.serve import _validate_run_as_patterns
-
-            pattern_errors = _validate_run_as_patterns(run_as)
-            for err in pattern_errors:
-                errors.append(f"'{runnable_name}' run_as: {err}")
-
-        for arg_name, arg in runnable.get("args", {}).items():
-            if not arg.get("description") and arg.get("required"):
-                warnings.append(f"'{runnable_name}.{arg_name}' is required but has no description")
-
-    # Print results
-    for msg in ok:
-        print(f"  ✓  {msg}")
-    for msg in warnings:
-        print(f"  ℹ  {msg}")
-    for msg in errors:
-        print(f"  ✗  {msg}")
-
-    if errors:
-        sys.exit(1)
-    elif not warnings:
-        print("\n  All checks passed.")
 
 
 def cmd_serve(args: list[str]) -> None:
@@ -146,15 +83,14 @@ def cmd_serve(args: list[str]) -> None:
     serve(registry_url=registry_url, name=name, registry_key=registry_key, registry_cert=registry_cert, dev=dev)
 
 
-def cmd_run(args: list[str]) -> None:
-    """Run a tool locally or remotely via SSH."""
-    from runspec.run import list_local_tools, list_registry_tools, run_local, run_remote
+def cmd_jump(args: list[str]) -> None:
+    """List or run tools on a jump box via SSH."""
+    from runspec.run import list_registry_tools, run_remote
 
-    # Split on '--' to separate runspec flags from tool args
     if "--" in args:
         sep = args.index("--")
         runspec_args = args[:sep]
-        tool_args = args[sep + 1 :]
+        tool_args = args[sep + 1:]
     else:
         runspec_args = args
         tool_args = []
@@ -166,78 +102,81 @@ def cmd_run(args: list[str]) -> None:
     ssh_user = _get_flag(runspec_args, "--user")
     ssh_key = _get_flag(runspec_args, "--ssh-key")
     no_host_key_check = "--no-host-key-check" in runspec_args
-    dev = "--dev" in runspec_args
+    fmt = _get_flag(runspec_args, "--format", default="text")
 
-    # First positional arg (not starting with --) is the tool name
     tool_name = next((a for a in runspec_args if not a.startswith("-")), None)
 
     if tool_name is None:
-        # No tool name — list available tools
-        if registry:
-            tools = list_registry_tools(registry, api_key=registry_key, cert=registry_cert)
-            if not tools:
-                print("No tools found in registry.")
-                return
-            print(f"Tools available via {registry}:\n")
-            for t in tools:
-                hosts_str = ", ".join(t.get("hosts", []))
-                desc = t.get("description") or ""
-                print(f"  {t['name']:<24} {desc}")
-                if hosts_str:
-                    print(f"  {'':24} hosts: {hosts_str}")
-        else:
-            tools = list_local_tools()
-            if not tools:
-                print("No tools found in local runspec.toml.")
-                print("Run 'runspec init' to get started.")
-                return
-            print("Local tools:\n")
-            for t in tools:
-                desc = t.get("description") or ""
-                print(f"  {t['name']:<24} {desc}")
-        return
-
-    if host:
-        # Remote mode
-        effective_registry = registry
-        if not effective_registry:
-            # Try to read from local config
-            from pathlib import Path as _Path
-
+        # No tool name — list available tools from registry
+        if not registry:
+            # Try local config for registry URL
             from runspec.finder import find_config
             from runspec.loader import load_raw
-
             try:
-                config_path = find_config(_Path.cwd())
+                config_path = find_config(Path.cwd())
                 raw = load_raw(config_path)
-                effective_registry = raw["config"].get("registry")
+                registry = raw["config"].get("registry")
             except FileNotFoundError:
                 pass
 
-        if not effective_registry:
-            print("✗  --registry is required for remote execution (or set [config] registry in runspec.toml)")
+        if not registry:
+            print("✗  --registry <url> is required to list jump box tools")
+            print("   Or set [config] registry in your runspec.toml")
             sys.exit(1)
 
-        rc = run_remote(
-            tool_name,
-            tool_args,
-            host=host,
-            registry_url=effective_registry,
-            ssh_user=ssh_user,
-            ssh_key=ssh_key,
-            no_host_key_check=no_host_key_check,
-            api_key=registry_key,
-            cert=registry_cert,
-        )
-        sys.exit(rc)
-    else:
-        # Local mode
-        rc = run_local(tool_name, tool_args, dev=dev)
-        sys.exit(rc)
+        tools = list_registry_tools(registry, api_key=registry_key, cert=registry_cert)
+        if not tools:
+            print("No tools found in registry.")
+            return
+
+        if fmt == "json":
+            print(json.dumps(tools, indent=2))
+            return
+
+        print(f"Tools available via {registry}:\n")
+        for t in tools:
+            hosts_str = ", ".join(t.get("hosts", []))
+            desc = t.get("description") or ""
+            print(f"  {t['name']:<24} {desc}")
+            if hosts_str:
+                print(f"  {'':24} hosts: {hosts_str}")
+        return
+
+    if not host:
+        print("✗  --host <host> is required to run on a jump box")
+        sys.exit(1)
+
+    effective_registry = registry
+    if not effective_registry:
+        from runspec.finder import find_config
+        from runspec.loader import load_raw
+        try:
+            config_path = find_config(Path.cwd())
+            raw = load_raw(config_path)
+            effective_registry = raw["config"].get("registry")
+        except FileNotFoundError:
+            pass
+
+    if not effective_registry:
+        print("✗  --registry is required for jump box execution (or set [config] registry in runspec.toml)")
+        sys.exit(1)
+
+    rc = run_remote(
+        tool_name,
+        tool_args,
+        host=host,
+        registry_url=effective_registry,
+        ssh_user=ssh_user,
+        ssh_key=ssh_key,
+        no_host_key_check=no_host_key_check,
+        api_key=registry_key,
+        cert=registry_cert,
+    )
+    sys.exit(rc)
 
 
 def cmd_init(args: list[str]) -> None:
-    """Create runspec.toml and a code stub."""
+    """Scaffold a new runnable — config and code stub."""
     name_flag = _get_flag(args, "--name")
     lang_flag = _get_flag(args, "--lang") or "python"
 
@@ -255,7 +194,6 @@ def _sanitize_name(raw: str) -> str:
 
     s = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
     return s or "myscript"
-
 
 
 def _init_runspec_toml(path: Path, name: str) -> None:
@@ -301,7 +239,7 @@ def _init_code_stub(directory: Path, name: str, lang: str) -> None:
         print(f"  ✓  Created {stub_path.name}")
 
     print("     Move both files inside your package directory before publishing.")
-    print("     Run 'runspec check' to validate.")
+    print("     Run 'runspec local' to see installed runnables and validate your setup.")
 
 
 def _write_and_verify(path: Path, content: str, original: str | None) -> None:
@@ -327,44 +265,6 @@ def _load_toml_file(path: Path) -> dict[str, Any]:
         import tomli as tomllib  # type: ignore[no-redef]
     with open(path, "rb") as f:
         return tomllib.load(f)
-
-
-def cmd_emit(args: list[str]) -> None:
-    """
-    Emit a tool schema for one or all runnables.
-    """
-    script_name = _get_flag(args, "--script")
-    fmt = _get_flag(args, "--format", default="mcp")
-
-    from runspec.finder import find_config
-    from runspec.inference import infer_script
-    from runspec.loader import load_raw
-
-    try:
-        config_path = find_config(Path.cwd())
-    except FileNotFoundError as e:
-        print(str(e))
-        sys.exit(1)
-
-    raw = load_raw(config_path)
-    config = raw["config"]
-
-    if script_name:
-        if script_name not in raw["runnables"]:
-            print(f"✗  Runnable '{script_name}' not found")
-            sys.exit(1)
-        runnables = {script_name: raw["runnables"][script_name]}
-    else:
-        runnables = raw["runnables"]
-
-    schema = {}
-    for name, runnable in runnables.items():
-        inferred = infer_script(runnable, config["autonomy_default"])
-        schema[name] = _build_schema(name, inferred, fmt or "mcp")
-
-    output = {"tools": list(schema.values())} if fmt == "mcp" else schema
-
-    print(json.dumps(output, indent=2, default=str))
 
 
 # ── Schema builders ───────────────────────────────────────────────────────────
@@ -440,24 +340,8 @@ def _arg_to_json_schema(arg: dict[str, Any]) -> dict[str, Any]:
 # ── Discovery helpers ─────────────────────────────────────────────────────────
 
 
-def _discover_local() -> list[dict[str, Any]]:
-    """Look for runspec.toml in or above the current directory."""
-    from runspec.finder import find_config
-    from runspec.loader import load_raw
-
-    try:
-        config_path = find_config(Path.cwd())
-        raw = load_raw(config_path)
-        return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
-    except FileNotFoundError:
-        return []
-
-
 def _discover_installed() -> list[dict[str, Any]]:
-    """
-    Find runspec-aware packages in the current Python environment
-    using importlib.metadata.
-    """
+    """Find runspec-aware packages in the current Python environment via importlib.metadata."""
     import importlib.metadata as meta
 
     discovered: list[dict[str, Any]] = []
@@ -491,10 +375,7 @@ def _requires_runspec(dist: Any) -> bool:
 
 
 def _check_dist_files(dist: Any) -> list[dict[str, Any]]:
-    """
-    Strategy 1: look for runspec.toml shipped as package data.
-    Returns discovered items or [] if not found.
-    """
+    """Strategy 1: look for runspec.toml shipped as package data."""
     from runspec.loader import load_raw
 
     if dist.files is None:
@@ -515,11 +396,7 @@ def _check_dist_files(dist: Any) -> list[dict[str, Any]]:
 
 
 def _check_editable_source(dist: Any) -> list[dict[str, Any]]:
-    """
-    Strategy 2: editable install — read direct_url.json to find the source
-    directory, then search package subdirectories for runspec.toml files.
-    Returns discovered items or [] if not applicable.
-    """
+    """Strategy 2: editable install — find source via direct_url.json."""
     import json as _json
     from urllib.parse import urlparse
     from urllib.request import url2pathname
@@ -589,20 +466,51 @@ def _emit_all(discovered: list[dict[str, Any]], fmt: str) -> dict[str, Any]:
     return {tool["name"]: tool for tool in tools}
 
 
-def _print_discover_text(discovered: list[dict[str, Any]]) -> None:
-    """Pretty-print discovered runnables."""
-    by_source: dict[str, list[str]] = {}
+def _print_local_text(discovered: list[dict[str, Any]]) -> None:
+    """Print installed runnables with inline validation warnings."""
+    by_source: dict[str, list[dict[str, Any]]] = {}
     for item in discovered:
-        src = item["source"]
-        by_source.setdefault(src, []).append(item["runnable"])
+        by_source.setdefault(item["source"], []).append(item)
 
-    print(f"Found {len(discovered)} runspec-aware runnable(s):\n")
-    for source, runnables in by_source.items():
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    print(f"Found {len(discovered)} installed runnable(s):\n")
+    for source, items in by_source.items():
         print(f"  {source}")
-        for r in runnables:
-            print(f"    • {r}")
-    print()
-    print("Run 'runspec discover --format mcp' to emit MCP tool schemas.")
+        for item in items:
+            name = item["runnable"]
+            runnable = item["spec"]
+            desc = runnable.get("description") or ""
+            autonomy = runnable.get("autonomy") or "confirm"
+            print(f"    {name:<24} {desc[:48]:<50}  [{autonomy}]")
+
+            if not runnable.get("description"):
+                warnings.append(f"'{name}' has no description — agents won't know what it does")
+            if not runnable.get("autonomy"):
+                warnings.append(f"'{name}' autonomy not declared — defaulting to 'confirm'")
+            for arg_name, arg in runnable.get("args", {}).items():
+                if not arg.get("description") and arg.get("required"):
+                    warnings.append(f"'{name}.{arg_name}' is required but has no description")
+            run_as = runnable.get("run_as")
+            if isinstance(run_as, dict):
+                from runspec.serve import _validate_run_as_patterns
+                for err in _validate_run_as_patterns(run_as):
+                    errors.append(f"'{name}' run_as: {err}")
+        print()
+
+    if warnings or errors:
+        print("Issues:\n")
+        for msg in warnings:
+            print(f"  ℹ  {msg}")
+        for msg in errors:
+            print(f"  ✗  {msg}")
+        print()
+
+    print("Run 'runspec local --format mcp' to emit MCP tool schemas.")
+
+    if errors:
+        sys.exit(1)
 
 
 # ── Arg parsing helpers ───────────────────────────────────────────────────────
@@ -624,53 +532,49 @@ Usage:
   runspec <command> [options]
 
 Commands:
-  init        Create runspec.toml with a scaffold
-  discover    Find all runspec-aware runnables in this environment
-  check       Validate this project's runspec setup
-  emit        Emit tool schemas for agent frameworks
+  init        Scaffold a new runnable — config and code stub
+  local       Inspect locally installed runnables
   serve       Start the MCP stdio server for this environment
-  run         Run a tool locally or on a remote host via SSH
+  jump        List or run tools on a jump box via SSH
 
-Options for run:
-  <tool>               Tool name to run (omit to list available tools)
-  --dev                Development mode: discover runnables under the nearest .git root
-  --host <host>        Remote host to run on (requires --registry or [config] registry)
+Options for local:
+  --format    Output format: text (default), json, mcp, openai, anthropic
+  --script    Runnable name to target (use with --format for single-runnable schemas)
+
+Options for serve:
+  --dev            Development mode: aggregate runnables under the nearest .git root
+  --registry       Registry base URL (overrides [config] registry)
+  --name           Instance name reported to registry (overrides [config] name)
+  --registry-key   API key for registry write endpoints
+  --registry-cert  CA certificate bundle path for HTTPS registry
+
+Options for jump:
+  <tool>               Tool name (omit to list available tools from registry)
+  --host <host>        Jump box to run on
   --registry <url>     Registry base URL
   --registry-key <k>   API key for registry read endpoints
   --registry-cert <f>  CA certificate bundle for HTTPS registry
   --user <user>        SSH username
   --ssh-key <file>     Path to SSH private key
   --no-host-key-check  Skip SSH host key verification (insecure)
+  --format             text (default) or json — listing mode only
   --                   Separator: everything after is passed to the tool
-
-Options for serve:
-  --dev            Development mode: discover runnables under the nearest .git root
-  --registry       Registry base URL (overrides [config] registry)
-  --name           Instance name reported to registry (overrides [config] name)
-  --registry-key   API key for registry write endpoints
-  --registry-cert  CA certificate bundle path for HTTPS registry
 
 Options for init:
   --name      Runnable name (default: current directory name)
   --lang      Language for code stub: python (default), typescript, javascript
 
-Options for discover:
-  --format    Output format: text (default), json, mcp, openai, anthropic
-
-Options for emit:
-  --script    Runnable name to emit (all runnables if omitted)
-  --format    Output format: mcp (default), openai, anthropic
-
 Examples:
-  runspec run                                    # list local tools
-  runspec run deploy                             # run locally
-  runspec run deploy -- --env prod               # run locally with args
-  runspec run --dev deploy                       # run in dev mode
-  runspec run deploy --host server-01            # run remotely via SSH
-  runspec run deploy --host server-01 -- --env prod
+  runspec local                                  # list installed runnables + validate
+  runspec local --format mcp                     # emit MCP tool schemas
+  runspec local --format mcp --script deploy     # emit schema for one runnable
+  runspec jump                                   # list tools from registry
+  runspec jump --registry http://registry:8080   # list from explicit registry
+  runspec jump deploy --host jumpbox-01 -- --env prod
+  runspec jump deploy --host jumpbox-01 --user deploy --ssh-key ~/.ssh/id_deploy -- --env prod
   runspec init
   runspec init --name myapp --lang typescript
-  runspec check
+  runspec serve
   runspec serve --registry http://registry:8080
   runspec serve --dev
 """)

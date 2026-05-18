@@ -44,7 +44,6 @@ def serve(
     """
     import signal
 
-    from runspec.cli import _build_schema
     from runspec.finder import find_config, find_configs_dev
     from runspec.inference import infer_script
     from runspec.loader import load_raw
@@ -65,7 +64,6 @@ def serve(
 
         config = load_raw(config_paths[0])["config"]
         all_runnables: dict[str, Any] = {}
-        toml_dir_map: dict[str, Path] = {}
         for cp in config_paths:
             extra = load_raw(cp)
             for rname, rdata in extra["runnables"].items():
@@ -74,7 +72,6 @@ def serve(
                     sys.stderr.flush()
                 else:
                     all_runnables[rname] = rdata
-                    toml_dir_map[rname] = cp.parent
 
         effective_registry: str | None = None  # registry disabled in --dev mode
     else:
@@ -88,7 +85,6 @@ def serve(
         raw = load_raw(config_path)
         config = raw["config"]
         all_runnables = raw["runnables"]
-        toml_dir_map = {}
         effective_registry = registry_url or config.get("registry")
 
     for rname, runnable in all_runnables.items():
@@ -106,15 +102,15 @@ def serve(
             sys.exit(1)
 
         inferred = infer_script(runnable, config["autonomy_default"])
-        tools[rname] = _build_schema(rname, inferred, "mcp")
-        arg_specs[rname] = inferred.get("args", {})
+        base_cmd = _find_script(rname, scripts_dir)
+        run_as = _resolve_run_as(runnable.get("run_as"), hostname)
+        become_method = runnable.get("become_method", "sudo")
+        become_flags = runnable.get("become_flags")
 
-        exec_specs[rname] = {
-            "command": _find_script(rname, scripts_dir, toml_dir_map.get(rname)),
-            "run_as": _resolve_run_as(runnable.get("run_as"), hostname),
-            "become_method": runnable.get("become_method", "sudo"),
-            "become_flags": runnable.get("become_flags"),
-        }
+        for flat_name, schema, arg_spec, exec_spec in _expand_tools(rname, inferred, base_cmd, run_as, become_method, become_flags):
+            tools[flat_name] = schema
+            arg_specs[flat_name] = arg_spec
+            exec_specs[flat_name] = exec_spec
 
     effective_name = name or _server_name(config)
 
@@ -507,28 +503,64 @@ def _validate_run_as_patterns(run_as_spec: Any) -> list[str]:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _find_script(name: str, scripts_dir: Path, toml_dir: Path | None = None) -> list[str] | None:
+def _expand_tools(
+    name: str,
+    inferred: dict[str, Any],
+    base_cmd: list[str] | None,
+    run_as: str | None,
+    become_method: str,
+    become_flags: str | None,
+) -> list[tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]]:
+    """Expand a runnable into flat MCP tool entries, recursing into subcommands.
+
+    A runnable with no commands yields one entry (name, schema, arg_spec, exec_spec).
+    A runnable with commands yields one entry per leaf subcommand, with underscore-joined
+    names and the subcommand path prepended to base_cmd.
+    e.g. portal_api.commands.orders_endpoint.commands.get_list →
+         name="portal_api_orders_endpoint_get_list",
+         base_cmd=["/path/to/portal_api", "orders_endpoint", "get_list"]
+    """
+    from runspec.cli import _build_schema
+
+    commands = inferred.get("commands") or {}
+    if commands:
+        result: list[tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+        for sub_name, sub_spec in commands.items():
+            result.extend(
+                _expand_tools(
+                    f"{name}_{sub_name}",
+                    sub_spec,
+                    [*(base_cmd or []), sub_name],
+                    run_as,
+                    become_method,
+                    become_flags,
+                )
+            )
+        return result
+    return [
+        (
+            name,
+            _build_schema(name, inferred, "mcp"),
+            inferred.get("args", {}),
+            {
+                "command": base_cmd,
+                "run_as": run_as,
+                "become_method": become_method,
+                "become_flags": become_flags,
+            },
+        )
+    ]
+
+
+def _find_script(name: str, scripts_dir: Path) -> list[str] | None:
     """Return a command list for the named script, or None if not found.
 
-    Search order:
-      1. Venv scripts dir — installed entry points (.exe on Windows)
-      2. TOML directory — bare name or shell script extensions
-      3. TOML directory — .py file, run via the current Python interpreter
+    Looks only in the venv scripts dir — tools must be installed (pip install -e .).
     """
     for ext in ("", ".exe"):
         candidate = scripts_dir / (name + ext)
         if candidate.is_file():
             return [str(candidate)]
-
-    if toml_dir is not None:
-        for ext in ("", ".sh", ".ksh", ".bash", ".zsh"):
-            candidate = toml_dir / (name + ext)
-            if candidate.is_file():
-                return [str(candidate)]
-        py_candidate = toml_dir / (name + ".py")
-        if py_candidate.is_file():
-            return [sys.executable, str(py_candidate)]
-
     return None
 
 

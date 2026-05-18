@@ -7,6 +7,34 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.0] — 2026-05-18
+
+### Changed
+
+- **CLI renamed** — `discover` → `local`, `run` → `jump`. The `check` and `emit`
+  commands have been absorbed into `local` (use `runspec local` for inline
+  validation, `runspec local --format mcp` for schema emission).
+
+- **`runspec local`** — lists every installed runspec-aware runnable with inline
+  validation. Exits with code 1 on errors, making it usable as a CI check.
+  Accepts `--format text|json|mcp|openai|anthropic` and `--script <name>` flags.
+
+- **`runspec jump`** — replaces `runspec run`. Without a tool name, queries the
+  registry and lists all available tools and their hosts. With a tool name and
+  `--host`, connects via SSH and runs the tool. Everything after `--` is passed
+  to the remote tool.
+
+- **Subcommand flattening in `runspec serve`** — runnables with nested
+  `.commands` are automatically expanded into flat MCP tools with
+  underscore-joined names (e.g. `portal-api_orders_get-list`). The command path
+  is prepended to argv at invocation time.
+
+- **Script discovery in `runspec serve`** is now venv-bin only. The previous
+  fallback that searched the TOML directory and guessed file extensions has been
+  removed. Scripts must be installed (`pip install` or `pip install -e .`).
+
+---
+
 ## [0.5.0] — 2026-05-18
 
 ### Added
@@ -89,6 +117,7 @@ Initial release.
 - **`load_spec()`** — loads spec without parsing `sys.argv` (for tooling).
 - Python 3.10–3.13 support. Zero runtime dependencies on Python 3.11+.
 
+[0.7.0]: https://github.com/JasonFinestone/runspec/releases/tag/v0.7.0
 [0.5.0]: https://github.com/JasonFinestone/runspec/releases/tag/v0.5.0
 [0.2.0]: https://github.com/JasonFinestone/runspec/releases/tag/v0.2.0
 [0.1.1]: https://github.com/JasonFinestone/runspec/releases/tag/v0.1.1

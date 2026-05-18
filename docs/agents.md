@@ -21,11 +21,11 @@ CLI uses — so they can never drift.
 
 ## Emitting schemas
 
-`runspec emit` converts your spec into JSON Schema tool definitions ready
-for any agent framework.
+`runspec local --format mcp` converts your installed runnables into JSON Schema
+tool definitions ready for any agent framework.
 
 ```bash
-runspec emit
+runspec local --format mcp
 ```
 
 ```json
@@ -64,10 +64,10 @@ already maintain.
 ### Format options
 
 ```bash
-runspec emit                          # MCP (default)
-runspec emit --format openai          # OpenAI tool calling
-runspec emit --format anthropic       # Anthropic tool use
-runspec emit --script deploy          # one runnable only
+runspec local --format mcp                     # MCP (default schema format)
+runspec local --format openai                  # OpenAI tool calling
+runspec local --format anthropic               # Anthropic tool use
+runspec local --format mcp --script deploy     # one runnable only
 ```
 
 ---
@@ -138,28 +138,28 @@ print(args.__autonomy__)   # "manual" if api-key was provided
 
 ## Discovery
 
-`runspec discover` finds runspec-aware runnables and emits them as tool
-schemas in one step.
+`runspec local` finds all installed runspec-aware runnables and emits them
+as tool schemas in one step.
 
 ```bash
-runspec discover --format mcp
+runspec local --format mcp
 ```
 
-`discover` searches two places: the local project (walking up from the
-current directory), and any installed package in the Python environment
-that lists `runspec` as a dependency. An agent that runs `discover` at
-startup sees every runspec-aware package in its environment — local or
-installed — with no per-tool configuration.
+`local` searches the current Python environment for any installed package
+that lists `runspec` as a dependency. An agent that runs `runspec local`
+sees every runspec-aware package installed in its environment — with no
+per-tool configuration. Runnables must be installed (`pip install -e .`
+or a full install) to appear.
 
 ```
-Found 3 runspec-aware runnable(s):
+Found 3 installed runnable(s):
 
   /home/user/project/mypkg/runspec.toml
-    • deploy
-    • process
-    • validate
+    deploy       Deploy the application    [confirm]
+    process      Process input files       [confirm]
+    validate     Validate input data       [autonomous]
 
-Run 'runspec discover --format mcp' to emit MCP tool schemas.
+Run 'runspec local --format mcp' to emit MCP tool schemas.
 ```
 
 With `--format mcp`, this becomes a complete tool list ready to hand to
@@ -210,7 +210,7 @@ whether it's allowed to proceed:
 ```python
 import json, subprocess
 
-schemas = json.loads(subprocess.check_output(["runspec", "emit", "--format", "mcp"]))
+schemas = json.loads(subprocess.check_output(["runspec", "local", "--format", "mcp"]))
 
 for tool in schemas["tools"]:
     autonomy = tool.get("x-autonomy", "confirm")
@@ -314,24 +314,25 @@ immediately available as a tool.
 
 ### Validate before exposing
 
-Run `runspec check` in CI before deploying. It catches missing descriptions,
-undeclared autonomy levels, and required args without descriptions — all
-things that degrade agent behaviour.
+Run `runspec local` in CI before deploying. It lists installed runnables and
+reports missing descriptions, undeclared autonomy levels, and required args
+without descriptions — all things that degrade agent behaviour. Exits with
+code 1 if errors are found.
 
 ```yaml
 # .gitlab-ci.yml / GitHub Actions
 - name: Validate runspec
-  run: runspec check
+  run: runspec local
 ```
 
 ### Emit schemas for inspection
 
 ```bash
 # Preview exactly what the agent will see
-runspec emit
+runspec local --format mcp
 
 # Emit for a specific framework
-runspec emit --format openai
+runspec local --format openai
 ```
 
 ---
@@ -358,5 +359,5 @@ The more of these you fill in, the more reliably an agent can use your
 runnable without human help.
 
 !!! tip
-    Run `runspec check` to see exactly which fields are missing. The check
-    output maps directly to gaps in what agents can infer.
+    Run `runspec local` to see exactly which fields are missing. The output
+    maps directly to gaps in what agents can infer.

@@ -1,7 +1,6 @@
 """
-run.py — Local and remote tool execution for runspec.
+run.py — Remote tool execution for runspec.
 
-Local mode  : reads runspec.toml, runs the tool as a subprocess.
 Remote mode : queries the registry for per-host metadata, SSHes via Paramiko.
 
 Paramiko is optional: pip install runspec[run]
@@ -9,74 +8,12 @@ Paramiko is optional: pip install runspec[run]
 
 from __future__ import annotations
 
-import os
 import shlex
-import subprocess
 import sys
 import threading
-from pathlib import Path
 from typing import Any
 
 # ── Public entry points ───────────────────────────────────────────────────────
-
-
-def run_local(tool_name: str, tool_args: list[str], dev: bool = False) -> int:
-    """Run a tool on the local machine as the current user."""
-    import sysconfig
-
-    from runspec.finder import find_config, find_configs_dev
-    from runspec.inference import infer_script
-    from runspec.loader import load_raw
-
-    scripts_dir = Path(sysconfig.get_path("scripts"))
-
-    if dev:
-        config_paths = find_configs_dev(Path.cwd())
-        if not config_paths:
-            sys.stderr.write("runspec run --dev: No runspec.toml files found (looked under the nearest .git root)\n")
-            sys.exit(1)
-
-        all_runnables: dict[str, Any] = {}
-        toml_dir_map: dict[str, Path] = {}
-        autonomy_default = "confirm"
-        for cp in config_paths:
-            extra = load_raw(cp)
-            if not all_runnables:
-                autonomy_default = extra["config"]["autonomy_default"]
-            for rname, rdata in extra["runnables"].items():
-                if rname not in all_runnables:
-                    all_runnables[rname] = rdata
-                    toml_dir_map[rname] = cp.parent
-
-        if tool_name not in all_runnables:
-            sys.stderr.write(f"✗  Tool '{tool_name}' not found in any runspec.toml\n")
-            sys.exit(1)
-
-        toml_dir: Path | None = toml_dir_map.get(tool_name)
-        inferred = infer_script(all_runnables[tool_name], autonomy_default)
-        arg_specs: dict[str, Any] = inferred.get("args", {})
-    else:
-        try:
-            config_path = find_config(Path.cwd())
-        except FileNotFoundError as e:
-            sys.stderr.write(f"✗  {e}\n")
-            sys.exit(1)
-
-        raw = load_raw(config_path)
-        if tool_name not in raw["runnables"]:
-            sys.stderr.write(f"✗  Tool '{tool_name}' not found in {config_path}\n")
-            sys.exit(1)
-
-        toml_dir = None
-        inferred = infer_script(raw["runnables"][tool_name], raw["config"]["autonomy_default"])
-        arg_specs = inferred.get("args", {})
-
-    cmd = _resolve_local_command(tool_name, scripts_dir, toml_dir)
-    arguments = _parse_argv_to_dict(tool_args, arg_specs)
-    runspec_env = _args_to_runspec_env(arguments, arg_specs)
-    env = {**os.environ, "RUNSPEC_AGENT": "1", **runspec_env}
-    result = subprocess.run([*cmd, *tool_args], env=env)
-    return result.returncode
 
 
 def run_remote(
@@ -100,18 +37,6 @@ def run_remote(
     return _ssh_exec(host, ssh_user, ssh_key, remote_cmd, no_host_key_check)
 
 
-def list_local_tools() -> list[dict[str, Any]]:
-    """Return tools from the local runspec.toml."""
-    from runspec.finder import find_config
-    from runspec.loader import load_raw
-
-    try:
-        config_path = find_config(Path.cwd())
-        raw = load_raw(config_path)
-        return [{"name": name, "description": spec.get("description", "")} for name, spec in raw["runnables"].items()]
-    except FileNotFoundError:
-        return []
-
 
 def list_registry_tools(registry_url: str, api_key: str | None = None, cert: str | None = None) -> list[dict[str, Any]]:
     """Return tools from the registry, with host list."""
@@ -128,41 +53,6 @@ def list_registry_tools(registry_url: str, api_key: str | None = None, cert: str
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-
-_DEV_SCRIPT_EXTS = ("", ".sh", ".ksh", ".bash", ".zsh")
-
-
-def _resolve_local_command(tool_name: str, scripts_dir: Path, toml_dir: Path | None = None) -> list[str]:
-    """Find the executable for a local runspec tool.
-
-    Returns a command list ready for subprocess (e.g. ['/path/to/greet'] or
-    [sys.executable, '/path/to/greet.py']).
-
-    Search order:
-      1. Venv scripts dir — installed entry points (.exe on Windows)
-      2. TOML directory — bare name or shell script extensions
-      3. TOML directory — .py file, run via the current Python interpreter
-    """
-    for ext in ("", ".exe"):
-        candidate = scripts_dir / (tool_name + ext)
-        if candidate.is_file():
-            return [str(candidate)]
-
-    if toml_dir is not None:
-        for ext in _DEV_SCRIPT_EXTS:
-            candidate = toml_dir / (tool_name + ext)
-            if candidate.is_file():
-                return [str(candidate)]
-        py_candidate = toml_dir / (tool_name + ".py")
-        if py_candidate.is_file():
-            return [sys.executable, str(py_candidate)]
-
-    sys.stderr.write(f"✗  No executable found for '{tool_name}'\n")
-    if toml_dir is not None:
-        sys.stderr.write(f"   In --dev mode: place '{tool_name}' or '{tool_name}.py' alongside runspec.toml\n")
-    else:
-        sys.stderr.write(f"   Is it installed in the venv? Run 'pip install -e .' first.\n")
-    sys.exit(1)
 
 
 def _fetch_registry_host(
