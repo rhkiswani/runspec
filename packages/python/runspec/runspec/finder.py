@@ -10,11 +10,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_SKIP_DIRS = frozenset({
-    ".git", ".venv", "venv", "__pycache__", "node_modules",
-    ".tox", "dist", "build", ".eggs", ".mypy_cache", ".ruff_cache",
-    ".pytest_cache", "htmlcov",
-})
+_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        "node_modules",
+        ".tox",
+        "dist",
+        "build",
+        ".eggs",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        "htmlcov",
+    }
+)
 
 
 def find_config(start: Path | None = None) -> Path:
@@ -34,9 +46,7 @@ def find_config(start: Path | None = None) -> Path:
         if candidate.exists():
             return candidate
 
-    raise FileNotFoundError(
-        "No runspec.toml found.\nRun 'runspec init' to create one, then move it inside your package directory."
-    )
+    raise FileNotFoundError("No runspec.toml found.\nRun 'runspec init' to create one, then move it inside your package directory.")
 
 
 def find_configs_dev(start: Path | None = None) -> list[Path]:

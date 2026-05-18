@@ -221,7 +221,6 @@ def test_find_script_exe_in_scripts_dir(tmp_path):
     assert _find_script("deploy", tmp_path) == [str(script)]
 
 
-
 def test_find_script_missing(tmp_path):
     assert _find_script("missing", tmp_path) is None
 

@@ -90,7 +90,7 @@ def cmd_jump(args: list[str]) -> None:
     if "--" in args:
         sep = args.index("--")
         runspec_args = args[:sep]
-        tool_args = args[sep + 1:]
+        tool_args = args[sep + 1 :]
     else:
         runspec_args = args
         tool_args = []
@@ -112,6 +112,7 @@ def cmd_jump(args: list[str]) -> None:
             # Try local config for registry URL
             from runspec.finder import find_config
             from runspec.loader import load_raw
+
             try:
                 config_path = find_config(Path.cwd())
                 raw = load_raw(config_path)
@@ -150,6 +151,7 @@ def cmd_jump(args: list[str]) -> None:
     if not effective_registry:
         from runspec.finder import find_config
         from runspec.loader import load_raw
+
         try:
             config_path = find_config(Path.cwd())
             raw = load_raw(config_path)
@@ -210,7 +212,7 @@ def _init_runspec_toml(path: Path, name: str) -> None:
 _CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
     "python": (
         ".py",
-        "from runspec import parse\n\n\ndef main():\n    args = parse()\n    # your logic here\n\n\nif __name__ == \"__main__\":\n    main()\n",
+        'from runspec import parse\n\n\ndef main():\n    args = parse()\n    # your logic here\n\n\nif __name__ == "__main__":\n    main()\n',
     ),
     "typescript": (
         ".ts",
@@ -495,6 +497,7 @@ def _print_local_text(discovered: list[dict[str, Any]]) -> None:
             run_as = runnable.get("run_as")
             if isinstance(run_as, dict):
                 from runspec.serve import _validate_run_as_patterns
+
                 for err in _validate_run_as_patterns(run_as):
                     errors.append(f"'{name}' run_as: {err}")
         print()

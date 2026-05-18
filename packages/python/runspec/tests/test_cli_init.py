@@ -106,6 +106,7 @@ def test_python_stub_is_executable_as_script(tmp_path, monkeypatch):
     cmd_init(["--name", "greet"])
     # compile-check: no syntax errors
     import ast
+
     ast.parse((tmp_path / "greet.py").read_text())
 
 

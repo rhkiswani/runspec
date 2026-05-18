@@ -37,7 +37,6 @@ def run_remote(
     return _ssh_exec(host, ssh_user, ssh_key, remote_cmd, no_host_key_check)
 
 
-
 def list_registry_tools(registry_url: str, api_key: str | None = None, cert: str | None = None) -> list[dict[str, Any]]:
     """Return tools from the registry, with host list."""
     data = _http_get(f"{registry_url.rstrip('/')}/tools", api_key, cert)
@@ -52,7 +51,6 @@ def list_registry_tools(registry_url: str, api_key: str | None = None, cert: str
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
-
 
 
 def _fetch_registry_host(
@@ -134,7 +132,6 @@ def _args_to_runspec_env(arguments: dict[str, Any], arg_specs: dict[str, Any]) -
             env_vars[env_key] = str(value)
 
     return env_vars
-
 
 
 def _parse_argv_to_dict(argv: list[str], arg_specs: dict[str, Any]) -> dict[str, Any]:

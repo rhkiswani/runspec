@@ -246,5 +246,3 @@ def test_http_get_exits_on_404(capsys: pytest.CaptureFixture[str]) -> None:
     t.join()
     srv.server_close()
     assert exc.value.code == 1
-
-
