@@ -257,14 +257,14 @@ def test_resolve_local_command_finds_in_scripts_dir(tmp_path) -> None:
     script = tmp_path / "greet"
     script.touch()
     result = _resolve_local_command("greet", tmp_path)
-    assert result == script
+    assert result == [str(script)]
 
 
 def test_resolve_local_command_finds_exe(tmp_path) -> None:
     script = tmp_path / "greet.exe"
     script.touch()
     result = _resolve_local_command("greet", tmp_path)
-    assert result == script
+    assert result == [str(script)]
 
 
 def test_resolve_local_command_toml_dir_fallback(tmp_path) -> None:
@@ -275,7 +275,30 @@ def test_resolve_local_command_toml_dir_fallback(tmp_path) -> None:
     script = toml_dir / "greet"
     script.touch()
     result = _resolve_local_command("greet", scripts_dir, toml_dir)
-    assert result == script
+    assert result == [str(script)]
+
+
+def test_resolve_local_command_toml_dir_py_fallback(tmp_path) -> None:
+    import sys
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    toml_dir = tmp_path / "mypkg"
+    toml_dir.mkdir()
+    py_script = toml_dir / "greet.py"
+    py_script.touch()
+    result = _resolve_local_command("greet", scripts_dir, toml_dir)
+    assert result == [sys.executable, str(py_script)]
+
+
+def test_resolve_local_command_toml_dir_sh_fallback(tmp_path) -> None:
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    toml_dir = tmp_path / "mypkg"
+    toml_dir.mkdir()
+    sh_script = toml_dir / "greet.sh"
+    sh_script.touch()
+    result = _resolve_local_command("greet", scripts_dir, toml_dir)
+    assert result == [str(sh_script)]
 
 
 def test_resolve_local_command_venv_beats_toml_dir(tmp_path) -> None:
@@ -287,7 +310,7 @@ def test_resolve_local_command_venv_beats_toml_dir(tmp_path) -> None:
     toml_dir.mkdir()
     (toml_dir / "greet").touch()
     result = _resolve_local_command("greet", scripts_dir, toml_dir)
-    assert result == venv_script
+    assert result == [str(venv_script)]
 
 
 def test_resolve_local_command_exits_when_missing(tmp_path, capsys) -> None:

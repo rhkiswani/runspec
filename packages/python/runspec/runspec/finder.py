@@ -59,6 +59,10 @@ def find_configs_dev(start: Path | None = None) -> list[Path]:
 
     configs: list[Path] = []
 
+    root_candidate = project_root / "runspec.toml"
+    if root_candidate.exists():
+        configs.append(root_candidate)
+
     def _walk(directory: Path) -> None:
         try:
             for entry in sorted(directory.iterdir()):

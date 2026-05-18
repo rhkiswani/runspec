@@ -285,7 +285,7 @@ def _build_registry_tools_list(
         entry = dict(schema)
         spec = exec_specs.get(name, {})
         cmd = spec.get("command")
-        entry["x-command"] = str(cmd) if cmd else name
+        entry["x-command"] = cmd[-1] if cmd else name
         entry["x-run-as"] = spec.get("run_as", "")
         entry["x-become-method"] = spec.get("become_method", "sudo")
         if spec.get("become_flags"):
@@ -384,7 +384,7 @@ def _handle_tools_call(
             "error": {"code": _ERR_INVALID_PARAMS, "message": f"Unknown tool: {name}"},
         }
 
-    cmd: Path | None = exec_specs.get(name, {}).get("command")
+    cmd: list[str] | None = exec_specs.get(name, {}).get("command")
     if cmd is None:
         return {
             "jsonrpc": "2.0",
@@ -403,7 +403,7 @@ def _handle_tools_call(
     runspec_env = _args_to_runspec_env(arguments, tool_arg_specs)
     env = {**os.environ, "RUNSPEC_AGENT": "1", **runspec_env}
 
-    result = subprocess.run([str(cmd), *argv], capture_output=True, text=True, env=env)
+    result = subprocess.run([*cmd, *argv], capture_output=True, text=True, env=env)
 
     if result.returncode == 0:
         return {
@@ -507,22 +507,27 @@ def _validate_run_as_patterns(run_as_spec: Any) -> list[str]:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _find_script(name: str, scripts_dir: Path, toml_dir: Path | None = None) -> Path | None:
-    """Return the path to the named script.
+def _find_script(name: str, scripts_dir: Path, toml_dir: Path | None = None) -> list[str] | None:
+    """Return a command list for the named script, or None if not found.
 
     Search order:
-      1. Venv scripts dir — Python/Node entry points; also .exe on Windows
-      2. TOML directory — dev-mode fallback for scripts alongside runspec.toml
+      1. Venv scripts dir — installed entry points (.exe on Windows)
+      2. TOML directory — bare name or shell script extensions
+      3. TOML directory — .py file, run via the current Python interpreter
     """
     for ext in ("", ".exe"):
         candidate = scripts_dir / (name + ext)
         if candidate.is_file():
-            return candidate
+            return [str(candidate)]
 
     if toml_dir is not None:
-        candidate = toml_dir / name
-        if candidate.is_file():
-            return candidate
+        for ext in ("", ".sh", ".ksh", ".bash", ".zsh"):
+            candidate = toml_dir / (name + ext)
+            if candidate.is_file():
+                return [str(candidate)]
+        py_candidate = toml_dir / (name + ".py")
+        if py_candidate.is_file():
+            return [sys.executable, str(py_candidate)]
 
     return None
 

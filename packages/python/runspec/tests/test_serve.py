@@ -171,7 +171,7 @@ def test_tools_call_success(tmp_path):
     script.chmod(0o755)
 
     tools = {"greet": {"name": "greet", "inputSchema": {"type": "object", "properties": {}}}}
-    exec_specs = {"greet": {"command": script}}
+    exec_specs = {"greet": {"command": [str(script)]}}
 
     resp = _handle_tools_call(3, {"name": "greet", "arguments": {}}, tools, {}, exec_specs)
     assert resp["result"]["isError"] is False
@@ -184,7 +184,7 @@ def test_tools_call_failure(tmp_path):
     script.chmod(0o755)
 
     tools = {"deploy": {"name": "deploy", "inputSchema": {"type": "object", "properties": {}}}}
-    exec_specs = {"deploy": {"command": script}}
+    exec_specs = {"deploy": {"command": [str(script)]}}
 
     resp = _handle_tools_call(4, {"name": "deploy", "arguments": {}}, tools, {}, exec_specs)
     assert resp["result"]["isError"] is True
@@ -199,7 +199,7 @@ def test_tools_call_sets_runspec_agent_env(tmp_path):
     script.chmod(0o755)
 
     tools = {"check_env": {"name": "check_env", "inputSchema": {"type": "object", "properties": {}}}}
-    exec_specs = {"check_env": {"command": script}}
+    exec_specs = {"check_env": {"command": [str(script)]}}
 
     resp = _handle_tools_call(5, {"name": "check_env", "arguments": {}}, tools, {}, exec_specs)
     assert "1" in resp["result"]["content"][0]["text"]
@@ -209,13 +209,15 @@ def test_tools_call_sets_runspec_agent_env(tmp_path):
 
 
 def test_find_script_in_scripts_dir(tmp_path):
-    (tmp_path / "deploy").touch()
-    assert _find_script("deploy", tmp_path) == tmp_path / "deploy"
+    script = tmp_path / "deploy"
+    script.touch()
+    assert _find_script("deploy", tmp_path) == [str(script)]
 
 
 def test_find_script_exe_in_scripts_dir(tmp_path):
-    (tmp_path / "deploy.exe").touch()
-    assert _find_script("deploy", tmp_path) == tmp_path / "deploy.exe"
+    script = tmp_path / "deploy.exe"
+    script.touch()
+    assert _find_script("deploy", tmp_path) == [str(script)]
 
 
 def test_find_script_toml_dir_fallback(tmp_path):
@@ -225,7 +227,28 @@ def test_find_script_toml_dir_fallback(tmp_path):
     toml_dir.mkdir()
     script = toml_dir / "greet"
     script.touch()
-    assert _find_script("greet", scripts_dir, toml_dir) == script
+    assert _find_script("greet", scripts_dir, toml_dir) == [str(script)]
+
+
+def test_find_script_toml_dir_py_fallback(tmp_path):
+    import sys
+    scripts_dir = tmp_path / "venv_scripts"
+    scripts_dir.mkdir()
+    toml_dir = tmp_path / "mypkg"
+    toml_dir.mkdir()
+    py_script = toml_dir / "greet.py"
+    py_script.touch()
+    assert _find_script("greet", scripts_dir, toml_dir) == [sys.executable, str(py_script)]
+
+
+def test_find_script_toml_dir_sh_fallback(tmp_path):
+    scripts_dir = tmp_path / "venv_scripts"
+    scripts_dir.mkdir()
+    toml_dir = tmp_path / "mypkg"
+    toml_dir.mkdir()
+    sh_script = toml_dir / "greet.sh"
+    sh_script.touch()
+    assert _find_script("greet", scripts_dir, toml_dir) == [str(sh_script)]
 
 
 def test_find_script_venv_takes_priority_over_toml_dir(tmp_path):
@@ -235,15 +258,13 @@ def test_find_script_venv_takes_priority_over_toml_dir(tmp_path):
     venv_script.touch()
     toml_dir = tmp_path / "mypkg"
     toml_dir.mkdir()
-    toml_script = toml_dir / "deploy"
-    toml_script.touch()
-    assert _find_script("deploy", scripts_dir, toml_dir) == venv_script
+    (toml_dir / "deploy").touch()
+    assert _find_script("deploy", scripts_dir, toml_dir) == [str(venv_script)]
 
 
 def test_find_script_no_fallback_without_toml_dir(tmp_path):
     scripts_dir = tmp_path / "venv_scripts"
     scripts_dir.mkdir()
-    # Script only exists in a "package" dir — not accessible without toml_dir
     pkg_dir = tmp_path / "mypkg"
     pkg_dir.mkdir()
     (pkg_dir / "greet").touch()

@@ -155,6 +155,16 @@ def test_find_configs_dev_walks_up_to_git(tmp_path):
     assert toml in result
 
 
+def test_find_configs_dev_finds_toml_at_project_root(tmp_path):
+    """runspec.toml directly in the project root (e.g. single-package dev) is found."""
+    git = tmp_path / ".git"
+    git.mkdir()
+    toml = tmp_path / "runspec.toml"
+    toml.touch()
+    result = find_configs_dev(tmp_path)
+    assert toml in result
+
+
 def test_find_configs_dev_empty_when_no_tomls(tmp_path):
     git = tmp_path / ".git"
     git.mkdir()
