@@ -23,4 +23,5 @@ nav:
   - Node Library: node.md
   - CLI: cli.md
   - Agent Integration: agents.md
+  - Registry: registry.md
   - Changelog: changelog.md

@@ -41,6 +41,7 @@ runspec-registry = "runspec_registry.cli:main"
 
 [project.urls]
 Homepage      = "https://JasonFinestone.github.io/runspec"
+Documentation = "https://JasonFinestone.github.io/runspec/registry"
 Repository    = "https://github.com/JasonFinestone/runspec"
 Issues        = "https://github.com/JasonFinestone/runspec/issues"
 
