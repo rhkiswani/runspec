@@ -18,7 +18,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 class TestSimpleFixture:
     @pytest.fixture
     def spec(self):
-        return load_raw(FIXTURES / "simple.toml", "runspec")
+        return load_raw(FIXTURES / "simple.toml")
 
     def test_config_defaults(self, spec):
         assert spec["config"]["autonomy_default"] == "confirm"
@@ -53,7 +53,7 @@ class TestSimpleFixture:
 class TestComplexFixture:
     @pytest.fixture
     def spec(self):
-        return load_raw(FIXTURES / "complex.toml", "runspec")
+        return load_raw(FIXTURES / "complex.toml")
 
     def test_config(self, spec):
         assert spec["config"]["autonomy_default"] == "confirm"
