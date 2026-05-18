@@ -7,6 +7,28 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] — 2026-05-18
+
+### Added
+
+- **Recursive dev-mode discovery** — `find_configs_dev()` now walks the full
+  directory tree under the `.git` root, not just one level deep. Monorepos
+  with `packages/python/mypkg/runspec.toml` layouts are found automatically.
+  Skips `.venv`, `__pycache__`, `node_modules`, `dist`, `build`, and all
+  hidden directories.
+
+- **`test_finder.py`** — new test file covering `find_config` (walk-up) and
+  `find_configs_dev` (recursive scan, skip dirs, multiple configs, no-git
+  fallback).
+
+### Changed
+
+- **`runspec.toml` is now the sole supported format.** Support for reading
+  runspec configuration from `pyproject.toml` (under `[tool.runspec.*]`) has
+  been removed. All docs, specs, and examples updated accordingly.
+
+---
+
 ## [0.2.0] — 2026-05-17
 
 ### Added
@@ -67,6 +89,7 @@ Initial release.
 - **`load_spec()`** — loads spec without parsing `sys.argv` (for tooling).
 - Python 3.10–3.13 support. Zero runtime dependencies on Python 3.11+.
 
+[0.5.0]: https://github.com/JasonFinestone/runspec/releases/tag/v0.5.0
 [0.2.0]: https://github.com/JasonFinestone/runspec/releases/tag/v0.2.0
 [0.1.1]: https://github.com/JasonFinestone/runspec/releases/tag/v0.1.1
 [0.1.0]: https://github.com/JasonFinestone/runspec/releases/tag/v0.1.0

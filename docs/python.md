@@ -38,13 +38,13 @@ def parse(
 
 | Parameter | Description |
 |---|---|
-| `script_name` | Override the runnable name. Inferred from `[project.scripts]` if omitted. |
+| `script_name` | Override the runnable name. Inferred from `sys.argv[0]` if omitted. |
 | `argv` | Override `sys.argv`. Uses `sys.argv[1:]` if omitted. Useful for testing. |
 
 ### What it does
 
-1. Walks up from the calling script's directory to find `pyproject.toml` or `runspec.toml`
-2. Infers the runnable name from `[project.scripts]`
+1. Walks up from the current directory to find `runspec.toml`
+2. Infers the runnable name from `sys.argv[0]`
 3. Applies inference rules to fill in `type` and `required`
 4. Resolves any subcommand from `argv`
 5. Intercepts `--help` / `-h` and prints usage, then exits
@@ -123,7 +123,7 @@ print(args.__script__)    # "deploy"
 print(args.__command__)   # "run"  (if a subcommand was matched)
 print(args.__autonomy__)  # "confirm"
 print(args.__agent__)     # True when called by an agent via runspec serve
-print(args.__source__)    # PosixPath('/home/user/project/pyproject.toml')
+print(args.__source__)    # PosixPath('/home/user/project/mypkg/runspec.toml')
 ```
 
 `__autonomy__` reflects the most restrictive level across the runnable, its args,
@@ -370,12 +370,12 @@ except runspec.errors.RunSpecError as e:
 ## Complete example
 
 ```toml
-# pyproject.toml
-[tool.runspec.process]
+# mypkg/runspec.toml
+[process]
 description = "Process input files"
 autonomy    = "confirm"
 
-[tool.runspec.process.args]
+[process.args]
 input    = {type = "path"}
 format   = {options = ["json", "csv"], default = "json"}
 workers  = {default = 4, range = [1, 16]}

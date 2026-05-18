@@ -5,48 +5,38 @@ only the setup step differs per language.
 
 ---
 
-## File Formats
+## File Format
 
-runspec looks for configuration in two places. Use whichever fits your project.
+runspec uses a single config format: `runspec.toml`. It is identical across
+Python, Node, and Go — only the setup step differs per language.
 
-=== "pyproject.toml"
+The file lives **inside your package directory** alongside the code it describes:
 
-    For Python projects. Runnables live under `[tool.runspec]`.
+```
+mypkg/
+  __init__.py
+  runspec.toml    ← here, not at the project root
+```
 
-    ```toml
-    [tool.runspec.config]
-    autonomy-default = "confirm"
+This location means build backends include it automatically as package data,
+and it can be discovered via `importlib.metadata` after install.
 
-    [tool.runspec.greet]
-    description = "Greet someone"
-    autonomy    = "autonomous"
+```toml
+[config]
+autonomy-default = "confirm"
 
-    [tool.runspec.greet.args]
-    name = {type = "str"}
-    loud = {default = false}
-    ```
+[greet]
+description = "Greet someone"
+autonomy    = "autonomous"
 
-=== "runspec.toml"
+[greet.args]
+name = {type = "str"}
+loud = {default = false}
+```
 
-    For all other projects, or when you want the interface spec separate
-    from your package config. Runnables are top-level sections.
-
-    ```toml
-    [config]
-    autonomy-default = "confirm"
-
-    [greet]
-    description = "Greet someone"
-    autonomy    = "autonomous"
-
-    [greet.args]
-    name = {type = "str"}
-    loud = {default = false}
-    ```
-
-**File lookup order:** runspec searches from the calling runnable's directory
-and walks up parent directories until it finds a match. This means a single
-`runspec.toml` at the root of a monorepo serves all runnables beneath it.
+**File lookup order:** `runspec.toml` is found by walking up from the current
+directory. For development across a multi-package repo, use `runspec serve --dev`
+to aggregate all `runspec.toml` files found under the nearest `.git` root.
 
 ---
 
@@ -71,11 +61,11 @@ version          = "1"
 
 ## Runnable Definition
 
-Everything under `[tool.runspec]` except `[config]` is a runnable.
+Every top-level section except `[config]` is a runnable.
 The name you choose is the command users type.
 
 ```toml
-[tool.runspec.deploy]
+[deploy]
 description     = "Deploy to production"       # recommended
 autonomy        = "manual"                     # optional
 autonomy-reason = "Irreversible operation"     # optional
@@ -116,7 +106,7 @@ If not declared, falls back to `autonomy-default` in `[config]`, then `"confirm"
 
 ## Argument Definition
 
-Arguments live under `[tool.runspec.<name>.args]`.
+Arguments live under `[<name>.args]`.
 
 ### Three levels of verbosity
 
@@ -305,7 +295,7 @@ Groups define relationships between arguments and are validated after
 individual arguments pass.
 
 ```toml
-[tool.runspec.<name>.groups.<group-name>]
+[<name>.groups.<group-name>]
 exclusive = true
 args      = ["format", "raw"]
 ```
@@ -356,7 +346,7 @@ requires = ["bucket", "region"]
 
 ## Subcommands
 
-Subcommands live under `[tool.runspec.<name>.commands.<subcommand>]`.
+Subcommands live under `[<name>.commands.<subcommand>]`.
 Each subcommand has its own `args`, `groups`, `autonomy`, and `description`.
 
 ```toml

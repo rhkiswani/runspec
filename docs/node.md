@@ -42,8 +42,8 @@ interface ParseOptions {
 
 ### What it does
 
-1. Walks up from `cwd` to find `pyproject.toml` or `runspec.toml`
-2. Infers the runnable name from `[project.scripts]` or the script filename
+1. Walks up from `cwd` to find `runspec.toml`
+2. Infers the runnable name from the script filename
 3. Applies inference rules to fill in `type` and `required`
 4. Resolves any subcommand from `argv`
 5. Intercepts `--help` / `-h` and prints usage, then exits
@@ -280,7 +280,7 @@ The `runspec` binary is included in `runspec-node`. Use it via `npx` in any proj
 that has `runspec-node` installed:
 
 ```bash
-npx runspec init              # scaffold runspec.toml or pyproject.toml
+npx runspec init              # scaffold runspec.toml
 npx runspec check             # validate your runspec config
 npx runspec discover          # find all runspec-aware runnables here
 npx runspec emit --format mcp # emit MCP tool schemas
@@ -304,8 +304,8 @@ See the [CLI reference](cli.md) for full documentation of all commands.
 ## MCP server
 
 `runspec serve` starts a JSON-RPC 2.0 MCP stdio server for your project. It reads
-your `runspec.toml` or `pyproject.toml`, exposes all runnables as tool schemas, and
-executes them when an agent calls a tool.
+your `runspec.toml`, exposes all runnables as tool schemas, and executes them when
+an agent calls a tool.
 
 **How it finds scripts:**
 

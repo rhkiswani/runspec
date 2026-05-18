@@ -22,8 +22,8 @@ how to invoke it as an agent tool, render it as a form, or generate an implement
 
 ## The Solution
 
-A single `runspec.toml` — or a `[tool.runspec]` section in `pyproject.toml` — that
-serves as the single source of truth for documentation, validation, agent tool schemas,
+A single `runspec.toml` that lives inside your package directory alongside your code —
+the single source of truth for documentation, validation, agent tool schemas,
 form rendering, and autonomy policy.
 
 ## Quick Start
@@ -32,17 +32,14 @@ form rendering, and autonomy policy.
 pip install runspec
 ```
 
-Add your script's interface to `pyproject.toml`:
+Add your script's interface to `mypkg/runspec.toml`:
 
 ```toml
-[project.scripts]
-greet = "mypackage.greet:main"
-
-[tool.runspec.greet]
+[greet]
 description = "Greet someone from the command line"
 autonomy    = "autonomous"
 
-[tool.runspec.greet.args]
+[greet.args]
 name  = {type = "str"}
 loud  = {default = false}
 times = {default = 1}

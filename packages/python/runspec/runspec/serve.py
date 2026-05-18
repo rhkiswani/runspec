@@ -35,6 +35,7 @@ def serve(
     name: str | None = None,
     registry_key: str | None = None,
     registry_cert: str | None = None,
+    dev: bool = False,
 ) -> None:
     """
     Start the runspec MCP stdio server.
@@ -44,19 +45,10 @@ def serve(
     import signal
 
     from runspec.cli import _build_schema
-    from runspec.finder import find_config
+    from runspec.finder import find_config, find_configs_dev
     from runspec.inference import infer_script
     from runspec.loader import load_raw
 
-    try:
-        config_path, fmt = find_config(Path.cwd())
-    except FileNotFoundError as e:
-        sys.stderr.write(f"runspec serve: {e}\n")
-        sys.stderr.flush()
-        sys.exit(1)
-
-    raw = load_raw(config_path, fmt)
-    config = raw["config"]
     hostname = socket.gethostname()
     scripts_dir = Path(sysconfig.get_path("scripts"))
 
@@ -64,7 +56,42 @@ def serve(
     arg_specs: dict[str, dict[str, Any]] = {}
     exec_specs: dict[str, dict[str, Any]] = {}
 
-    for rname, runnable in raw["runnables"].items():
+    if dev:
+        config_paths = find_configs_dev(Path.cwd())
+        if not config_paths:
+            sys.stderr.write("runspec serve --dev: No runspec.toml files found (looked for them under the nearest .git root)\n")
+            sys.stderr.flush()
+            sys.exit(1)
+
+        config = load_raw(config_paths[0])["config"]
+        all_runnables: dict[str, Any] = {}
+        toml_dir_map: dict[str, Path] = {}
+        for cp in config_paths:
+            extra = load_raw(cp)
+            for rname, rdata in extra["runnables"].items():
+                if rname in all_runnables:
+                    sys.stderr.write(f"runspec serve --dev: warning: '{rname}' defined in multiple TOML files, keeping first\n")
+                    sys.stderr.flush()
+                else:
+                    all_runnables[rname] = rdata
+                    toml_dir_map[rname] = cp.parent
+
+        effective_registry: str | None = None  # registry disabled in --dev mode
+    else:
+        try:
+            config_path = find_config(Path.cwd())
+        except FileNotFoundError as e:
+            sys.stderr.write(f"runspec serve: {e}\n")
+            sys.stderr.flush()
+            sys.exit(1)
+
+        raw = load_raw(config_path)
+        config = raw["config"]
+        all_runnables = raw["runnables"]
+        toml_dir_map = {}
+        effective_registry = registry_url or config.get("registry")
+
+    for rname, runnable in all_runnables.items():
         # Skip tools restricted to other hosts
         allowed_hosts = runnable.get("hosts")
         if allowed_hosts and hostname not in allowed_hosts:
@@ -83,14 +110,13 @@ def serve(
         arg_specs[rname] = inferred.get("args", {})
 
         exec_specs[rname] = {
-            "command": _find_script(rname, scripts_dir),  # Path | None
+            "command": _find_script(rname, scripts_dir, toml_dir_map.get(rname)),
             "run_as": _resolve_run_as(runnable.get("run_as"), hostname),
             "become_method": runnable.get("become_method", "sudo"),
             "become_flags": runnable.get("become_flags"),
         }
 
     effective_name = name or _server_name(config)
-    effective_registry = registry_url or config.get("registry")
 
     if effective_registry:
         agent_id = str(uuid.uuid4())
@@ -364,7 +390,7 @@ def _handle_tools_call(
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "content": [{"type": "text", "text": f"Script '{name}' not found. Place it alongside runspec.toml or in a bin/ subdirectory."}],
+                "content": [{"type": "text", "text": f"Script '{name}' not found. Install it in the venv (production) or place it alongside runspec.toml (--dev mode)."}],
                 "isError": True,
             },
         }
@@ -481,27 +507,22 @@ def _validate_run_as_patterns(run_as_spec: Any) -> list[str]:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-_SHELL_EXTS = ("", ".sh", ".ksh", ".bash", ".zsh")
-
-
-def _find_script(name: str, scripts_dir: Path) -> Path | None:
+def _find_script(name: str, scripts_dir: Path, toml_dir: Path | None = None) -> Path | None:
     """Return the path to the named script.
 
     Search order:
       1. Venv scripts dir — Python/Node entry points; also .exe on Windows
-      2. cwd/ — scripts living alongside runspec.toml
-      3. cwd/bin/ — scripts in a conventional bin subdirectory
+      2. TOML directory — dev-mode fallback for scripts alongside runspec.toml
     """
-    for ext in (*_SHELL_EXTS, ".exe"):
+    for ext in ("", ".exe"):
         candidate = scripts_dir / (name + ext)
         if candidate.is_file():
             return candidate
 
-    for directory in (Path.cwd(), Path.cwd() / "bin"):
-        for ext in _SHELL_EXTS:
-            candidate = directory / (name + ext)
-            if candidate.is_file():
-                return candidate
+    if toml_dir is not None:
+        candidate = toml_dir / name
+        if candidate.is_file():
+            return candidate
 
     return None
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from runspec import errors
-from runspec.finder import find_config, find_script_name
+from runspec.finder import find_config
 from runspec.inference import effective_autonomy, infer_script
 from runspec.loader import load_raw
 from runspec.models import Arg, Group, RunSpec
@@ -36,14 +36,14 @@ def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunS
         FileNotFoundError: if no runspec config is found
     """
     # 1. Find config
-    config_path, fmt = find_config()
+    config_path = find_config()
 
     # 2. Load and normalise TOML
-    raw = load_raw(config_path, fmt)
+    raw = load_raw(config_path)
     config = raw["config"]
 
     # 3. Resolve runnable name
-    name = script_name or find_script_name(config_path, fmt) or _infer_from_argv()
+    name = script_name or _infer_from_argv()
 
     # Guard reserved name
     if name == "config":

@@ -1,7 +1,7 @@
 """
 run.py — Local and remote tool execution for runspec.
 
-Local mode  : reads runspec.toml / pyproject.toml, runs the tool as a subprocess.
+Local mode  : reads runspec.toml, runs the tool as a subprocess.
 Remote mode : queries the registry for per-host metadata, SSHes via Paramiko.
 
 Paramiko is optional: pip install runspec[run]
@@ -20,10 +20,58 @@ from typing import Any
 # ── Public entry points ───────────────────────────────────────────────────────
 
 
-def run_local(tool_name: str, tool_args: list[str]) -> int:
+def run_local(tool_name: str, tool_args: list[str], dev: bool = False) -> int:
     """Run a tool on the local machine as the current user."""
-    cmd_path = _resolve_local_command(tool_name)
-    arg_specs = _load_arg_specs(tool_name)
+    import sysconfig
+
+    from runspec.finder import find_config, find_configs_dev
+    from runspec.inference import infer_script
+    from runspec.loader import load_raw
+
+    scripts_dir = Path(sysconfig.get_path("scripts"))
+
+    if dev:
+        config_paths = find_configs_dev(Path.cwd())
+        if not config_paths:
+            sys.stderr.write("runspec run --dev: No runspec.toml files found (looked under the nearest .git root)\n")
+            sys.exit(1)
+
+        all_runnables: dict[str, Any] = {}
+        toml_dir_map: dict[str, Path] = {}
+        autonomy_default = "confirm"
+        for cp in config_paths:
+            extra = load_raw(cp)
+            if not all_runnables:
+                autonomy_default = extra["config"]["autonomy_default"]
+            for rname, rdata in extra["runnables"].items():
+                if rname not in all_runnables:
+                    all_runnables[rname] = rdata
+                    toml_dir_map[rname] = cp.parent
+
+        if tool_name not in all_runnables:
+            sys.stderr.write(f"✗  Tool '{tool_name}' not found in any runspec.toml\n")
+            sys.exit(1)
+
+        toml_dir: Path | None = toml_dir_map.get(tool_name)
+        inferred = infer_script(all_runnables[tool_name], autonomy_default)
+        arg_specs: dict[str, Any] = inferred.get("args", {})
+    else:
+        try:
+            config_path = find_config(Path.cwd())
+        except FileNotFoundError as e:
+            sys.stderr.write(f"✗  {e}\n")
+            sys.exit(1)
+
+        raw = load_raw(config_path)
+        if tool_name not in raw["runnables"]:
+            sys.stderr.write(f"✗  Tool '{tool_name}' not found in {config_path}\n")
+            sys.exit(1)
+
+        toml_dir = None
+        inferred = infer_script(raw["runnables"][tool_name], raw["config"]["autonomy_default"])
+        arg_specs = inferred.get("args", {})
+
+    cmd_path = _resolve_local_command(tool_name, scripts_dir, toml_dir)
     arguments = _parse_argv_to_dict(tool_args, arg_specs)
     runspec_env = _args_to_runspec_env(arguments, arg_specs)
     env = {**os.environ, "RUNSPEC_AGENT": "1", **runspec_env}
@@ -53,13 +101,13 @@ def run_remote(
 
 
 def list_local_tools() -> list[dict[str, Any]]:
-    """Return tools from the local runspec.toml / pyproject.toml."""
+    """Return tools from the local runspec.toml."""
     from runspec.finder import find_config
     from runspec.loader import load_raw
 
     try:
-        config_path, fmt = find_config(Path.cwd())
-        raw = load_raw(config_path, fmt)
+        config_path = find_config(Path.cwd())
+        raw = load_raw(config_path)
         return [{"name": name, "description": spec.get("description", "")} for name, spec in raw["runnables"].items()]
     except FileNotFoundError:
         return []
@@ -81,35 +129,22 @@ def list_registry_tools(registry_url: str, api_key: str | None = None, cert: str
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-def _resolve_local_command(tool_name: str) -> Path:
-    """Find the installed executable for a local runspec tool."""
-    import shutil
-    import sysconfig
+def _resolve_local_command(tool_name: str, scripts_dir: Path, toml_dir: Path | None = None) -> Path:
+    """Find the executable for a local runspec tool.
 
-    from runspec.finder import find_config
-    from runspec.loader import load_raw
-
-    try:
-        config_path, fmt = find_config(Path.cwd())
-    except FileNotFoundError as e:
-        sys.stderr.write(f"✗  {e}\n")
-        sys.exit(1)
-
-    raw = load_raw(config_path, fmt)
-    if tool_name not in raw["runnables"]:
-        sys.stderr.write(f"✗  Tool '{tool_name}' not found in {config_path}\n")
-        sys.exit(1)
-
-    scripts_dir = Path(sysconfig.get_path("scripts"))
-    for candidate in (scripts_dir / tool_name, scripts_dir / (tool_name + ".exe")):
-        if candidate.exists():
+    Checks the venv scripts dir first, then toml_dir as a dev-mode fallback.
+    """
+    for ext in ("", ".exe"):
+        candidate = scripts_dir / (tool_name + ext)
+        if candidate.is_file():
             return candidate
 
-    found = shutil.which(tool_name)
-    if found:
-        return Path(found)
+    if toml_dir is not None:
+        candidate = toml_dir / tool_name
+        if candidate.is_file():
+            return candidate
 
-    sys.stderr.write(f"✗  No executable found for '{tool_name}' — is it installed?\n")
+    sys.stderr.write(f"✗  No executable found for '{tool_name}' — is it installed in the venv?\n")
     sys.exit(1)
 
 
@@ -193,26 +228,6 @@ def _args_to_runspec_env(arguments: dict[str, Any], arg_specs: dict[str, Any]) -
 
     return env_vars
 
-
-def _load_arg_specs(tool_name: str) -> dict[str, Any]:
-    """Load inferred arg specs for a tool from the local runspec config."""
-    from runspec.finder import find_config
-    from runspec.inference import infer_script
-    from runspec.loader import load_raw
-
-    try:
-        config_path, fmt = find_config(Path.cwd())
-        raw = load_raw(config_path, fmt)
-    except FileNotFoundError:
-        return {}
-
-    runnable = raw["runnables"].get(tool_name, {})
-    if not runnable:
-        return {}
-
-    inferred = infer_script(runnable, raw["config"]["autonomy_default"])
-    result: dict[str, Any] = inferred.get("args", {})
-    return result
 
 
 def _parse_argv_to_dict(argv: list[str], arg_specs: dict[str, Any]) -> dict[str, Any]:

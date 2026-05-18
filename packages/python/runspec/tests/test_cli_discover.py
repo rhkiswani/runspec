@@ -164,7 +164,9 @@ def test_check_editable_source_finds_runspec_toml(tmp_path):
         [compress.args.input]
         type = "path"
     """)
-    (tmp_path / "runspec.toml").write_text(toml_content, encoding="utf-8")
+    pkg_dir = tmp_path / "mypkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "runspec.toml").write_text(toml_content, encoding="utf-8")
 
     data = {"url": tmp_path.as_uri(), "dir_info": {"editable": True}}
     f = _make_dist_file("direct_url.json", json.dumps(data), tmp_path)
@@ -175,31 +177,12 @@ def test_check_editable_source_finds_runspec_toml(tmp_path):
     assert result[0]["runnable"] == "compress"
 
 
-def test_check_editable_source_finds_pyproject_toml(tmp_path):
-    pyproject = textwrap.dedent("""\
-        [project]
-        name = "mypkg"
-
-        [tool.runspec.deploy]
-        description = "Deploy the app"
-    """)
-    (tmp_path / "pyproject.toml").write_text(pyproject, encoding="utf-8")
-
-    data = {"url": tmp_path.as_uri(), "dir_info": {"editable": True}}
-    f = _make_dist_file("direct_url.json", json.dumps(data), tmp_path)
-    dist = SimpleNamespace(files=[f])
-
-    result = _check_editable_source(dist)
-    assert len(result) == 1
-    assert result[0]["runnable"] == "deploy"
-
-
 def test_check_editable_source_no_config_file(tmp_path):
+    # No subdirectories with runspec.toml — empty result
     data = {"url": tmp_path.as_uri(), "dir_info": {"editable": True}}
     f = _make_dist_file("direct_url.json", json.dumps(data), tmp_path)
     dist = SimpleNamespace(files=[f])
-    with patch("runspec.finder.find_config", side_effect=FileNotFoundError("no config")):
-        assert _check_editable_source(dist) == []
+    assert _check_editable_source(dist) == []
 
 
 # ── _requires_runspec ─────────────────────────────────────────────────────────

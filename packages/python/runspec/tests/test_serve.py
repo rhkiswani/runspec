@@ -7,6 +7,8 @@ script discovery. Subprocess execution is tested via mocking.
 
 from __future__ import annotations
 
+import pytest
+
 from runspec.serve import (
     MCP_PROTOCOL_VERSION,
     _args_to_argv,
@@ -16,6 +18,7 @@ from runspec.serve import (
     _handle_tools_call,
     _handle_tools_list,
     _server_name,
+    serve,
 )
 
 # ── _args_to_argv ─────────────────────────────────────────────────────────────
@@ -215,48 +218,36 @@ def test_find_script_exe_in_scripts_dir(tmp_path):
     assert _find_script("deploy", tmp_path) == tmp_path / "deploy.exe"
 
 
-def test_find_script_sh_in_scripts_dir(tmp_path):
-    (tmp_path / "backup.sh").touch()
-    assert _find_script("backup", tmp_path) == tmp_path / "backup.sh"
-
-
-def test_find_script_ksh_in_scripts_dir(tmp_path):
-    (tmp_path / "validate.ksh").touch()
-    assert _find_script("validate", tmp_path) == tmp_path / "validate.ksh"
-
-
-def test_find_script_in_cwd(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    script = tmp_path / "backup-logs"
+def test_find_script_toml_dir_fallback(tmp_path):
+    scripts_dir = tmp_path / "venv_scripts"
+    scripts_dir.mkdir()
+    toml_dir = tmp_path / "mypkg"
+    toml_dir.mkdir()
+    script = toml_dir / "greet"
     script.touch()
-    assert _find_script("backup-logs", tmp_path / "nonexistent-scripts") == script
+    assert _find_script("greet", scripts_dir, toml_dir) == script
 
 
-def test_find_script_sh_in_cwd(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    script = tmp_path / "backup-logs.sh"
-    script.touch()
-    assert _find_script("backup-logs", tmp_path / "nonexistent-scripts") == script
-
-
-def test_find_script_in_cwd_bin(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    script = bin_dir / "backup-logs"
-    script.touch()
-    assert _find_script("backup-logs", tmp_path / "nonexistent-scripts") == script
-
-
-def test_find_script_scripts_dir_takes_priority_over_cwd(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_find_script_venv_takes_priority_over_toml_dir(tmp_path):
     scripts_dir = tmp_path / "venv_scripts"
     scripts_dir.mkdir()
     venv_script = scripts_dir / "deploy"
     venv_script.touch()
-    cwd_script = tmp_path / "deploy"
-    cwd_script.touch()
-    assert _find_script("deploy", scripts_dir) == venv_script
+    toml_dir = tmp_path / "mypkg"
+    toml_dir.mkdir()
+    toml_script = toml_dir / "deploy"
+    toml_script.touch()
+    assert _find_script("deploy", scripts_dir, toml_dir) == venv_script
+
+
+def test_find_script_no_fallback_without_toml_dir(tmp_path):
+    scripts_dir = tmp_path / "venv_scripts"
+    scripts_dir.mkdir()
+    # Script only exists in a "package" dir — not accessible without toml_dir
+    pkg_dir = tmp_path / "mypkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "greet").touch()
+    assert _find_script("greet", scripts_dir) is None
 
 
 def test_find_script_missing(tmp_path):
@@ -279,3 +270,75 @@ def test_server_name_falls_back_to_venv():
 def test_server_name_ignores_non_string():
     name = _server_name({"name": 42})
     assert isinstance(name, str)
+
+
+# ── serve(dev=True) ───────────────────────────────────────────────────────────
+
+
+def test_serve_dev_exits_when_no_configs_found(capsys):
+    from unittest.mock import patch
+
+    with patch("runspec.finder.find_configs_dev", return_value=[]):
+        with pytest.raises(SystemExit) as exc:
+            serve(dev=True)
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert "No runspec.toml" in captured.err
+
+
+def test_serve_dev_warns_on_duplicate_runnable_name(tmp_path, capsys):
+    from unittest.mock import patch
+
+    toml1 = tmp_path / "pkg1" / "runspec.toml"
+    toml1.parent.mkdir()
+    toml1.write_text("[greet]\ndescription = 'From pkg1'\n", encoding="utf-8")
+
+    toml2 = tmp_path / "pkg2" / "runspec.toml"
+    toml2.parent.mkdir()
+    toml2.write_text("[greet]\ndescription = 'From pkg2'\n", encoding="utf-8")
+
+    captured_tools: dict = {}
+
+    def fake_mcp_loop(tools, arg_specs, exec_specs, name):
+        captured_tools.update(tools)
+
+    with (
+        patch("runspec.finder.find_configs_dev", return_value=[toml1, toml2]),
+        patch("runspec.serve._mcp_loop", fake_mcp_loop),
+        patch("runspec.serve._find_script", return_value=None),
+    ):
+        serve(dev=True)
+
+    captured = capsys.readouterr()
+    assert "warning" in captured.err
+    assert "greet" in captured.err
+    # First definition wins
+    assert "greet" in captured_tools
+
+
+def test_serve_dev_aggregates_runnables_from_multiple_tomls(tmp_path):
+    from unittest.mock import patch
+
+    toml1 = tmp_path / "pkg1" / "runspec.toml"
+    toml1.parent.mkdir()
+    toml1.write_text("[greet]\ndescription = 'Greet'\n", encoding="utf-8")
+
+    toml2 = tmp_path / "pkg2" / "runspec.toml"
+    toml2.parent.mkdir()
+    toml2.write_text("[deploy]\ndescription = 'Deploy'\n", encoding="utf-8")
+
+    captured_tools: dict = {}
+
+    def fake_mcp_loop(tools, arg_specs, exec_specs, name):
+        captured_tools.update(tools)
+
+    with (
+        patch("runspec.finder.find_configs_dev", return_value=[toml1, toml2]),
+        patch("runspec.serve._mcp_loop", fake_mcp_loop),
+        patch("runspec.serve._find_script", return_value=None),
+    ):
+        serve(dev=True)
+
+    assert "greet" in captured_tools
+    assert "deploy" in captured_tools

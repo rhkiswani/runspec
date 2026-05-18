@@ -1,115 +1,77 @@
 """
-finder.py — Locates the runspec configuration file.
+finder.py — Locates runspec configuration files.
 
-Search order (per SPEC.md):
-  1. pyproject.toml with [tool.runspec] section
-  2. runspec.toml
-  Walk up from the starting directory repeating 1 and 2.
+Search strategies:
+  find_config(start)      — walk up from start, return first runspec.toml found
+  find_configs_dev(start) — walk up to .git, then recurse down collecting all runspec.toml files
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib  # type: ignore[no-redef]
+_SKIP_DIRS = frozenset({
+    ".git", ".venv", "venv", "__pycache__", "node_modules",
+    ".tox", "dist", "build", ".eggs", ".mypy_cache", ".ruff_cache",
+    ".pytest_cache", "htmlcov",
+})
 
 
-def find_config(start: Path | None = None) -> tuple[Path, str]:
+def find_config(start: Path | None = None) -> Path:
     """
-    Find the runspec config file starting from `start` and walking up.
+    Walk up from start looking for runspec.toml.
 
     Returns:
-        (config_path, format) where format is "pyproject" or "runspec"
+        Path to the first runspec.toml found
 
     Raises:
-        FileNotFoundError: if no config file is found
+        FileNotFoundError: if no runspec.toml is found
     """
-    search_dir = (start or _caller_directory()).resolve()
+    search_dir = (start or Path.cwd()).resolve()
 
     for directory in [search_dir, *search_dir.parents]:
-        # Check pyproject.toml first
-        pyproject = directory / "pyproject.toml"
-        if pyproject.exists() and _has_runspec_section(pyproject):
-            return pyproject, "pyproject"
-
-        # Then runspec.toml
-        runspec_toml = directory / "runspec.toml"
-        if runspec_toml.exists():
-            return runspec_toml, "runspec"
+        candidate = directory / "runspec.toml"
+        if candidate.exists():
+            return candidate
 
     raise FileNotFoundError(
-        "No runspec configuration found.\nExpected one of:\n  - pyproject.toml with [tool.runspec] section\n  - runspec.toml\n\nRun 'runspec check' to validate your project setup."
+        "No runspec.toml found.\nRun 'runspec init' to create one, then move it inside your package directory."
     )
 
 
-def find_script_name(config_path: Path, format: str) -> str | None:
+def find_configs_dev(start: Path | None = None) -> list[Path]:
     """
-    Infer the calling script's name from [project.scripts] or
-    [tool.poetry.scripts] by matching the calling executable.
+    Walk up from start until .git is found (project root), then recurse down
+    collecting all runspec.toml files, skipping heavy/non-package directories.
 
-    Returns the script name if found, None if it cannot be determined.
+    If no .git is found, uses start (or cwd) as the project root.
+
+    Returns:
+        List of Path objects for all runspec.toml files found (sorted for determinism)
     """
-    try:
-        with open(config_path, "rb") as f:
-            data = tomllib.load(f)
-    except Exception:
-        return None
+    search_dir = (start or Path.cwd()).resolve()
 
-    # Get the name of the currently running script/executable
-    caller = Path(sys.argv[0]).stem if sys.argv else None
-    if not caller:
-        return None
+    project_root = search_dir
+    for directory in [search_dir, *search_dir.parents]:
+        if (directory / ".git").exists():
+            project_root = directory
+            break
 
-    # Check [project.scripts] first (PEP 517/518 standard)
-    project_scripts = data.get("project", {}).get("scripts", {})
-    if caller in project_scripts:
-        return caller
+    configs: list[Path] = []
 
-    # Fall back to [tool.poetry.scripts] with a nudge logged
-    poetry_scripts = data.get("tool", {}).get("poetry", {}).get("scripts", {})
-    if caller in poetry_scripts:
-        _nudge_poetry()
-        return caller
+    def _walk(directory: Path) -> None:
+        try:
+            for entry in sorted(directory.iterdir()):
+                if not entry.is_dir():
+                    continue
+                if entry.name.startswith(".") or entry.name in _SKIP_DIRS:
+                    continue
+                candidate = entry / "runspec.toml"
+                if candidate.exists():
+                    configs.append(candidate)
+                _walk(entry)
+        except PermissionError:
+            pass
 
-    return caller  # return caller name even if not in scripts — let loader handle it
-
-
-def _has_runspec_section(pyproject_path: Path) -> bool:
-    """Return True if pyproject.toml contains a [tool.runspec] section."""
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-        return "runspec" in data.get("tool", {})
-    except Exception:
-        return False
-
-
-def _caller_directory() -> Path:
-    """Return the directory of the script that called parse()."""
-    # Walk up the call stack to find the first frame outside runspec
-    import inspect
-
-    for frame_info in inspect.stack():
-        frame_path = Path(frame_info.filename).resolve()
-        # Skip frames that are inside the runspec package itself
-        if "runspec" not in frame_path.parts[-3:]:
-            return frame_path.parent
-
-    # Fallback to current working directory
-    return Path.cwd()
-
-
-def _nudge_poetry() -> None:
-    """Print a one-time informational nudge about [project.scripts]."""
-    import warnings
-
-    warnings.warn(
-        "\nrunspec: Using [tool.poetry.scripts] — consider migrating to [project.scripts]\n"
-        "for better compatibility with modern Python packaging tools.\n"
-        "See: https://packaging.python.org/en/latest/guides/writing-pyproject-toml/\n",
-        stacklevel=4,
-    )
+    _walk(project_root)
+    return configs

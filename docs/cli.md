@@ -13,34 +13,22 @@ runspec <command> [options]
 
 ## runspec init
 
-Scaffold a new runspec config in the current directory. Creates or updates
-`pyproject.toml` or `runspec.toml` with a starter runnable ready to fill in.
+Scaffold a new `runspec.toml` in the current directory with a starter runnable ready to fill in.
 
 ```bash
-runspec init [--name <name>] [--file pyproject|runspec]
+runspec init [--name <name>]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `--name` | current directory name | Name for the initial runnable |
-| `--file` | auto-detected | Force a specific target file |
 
-### File selection
-
-`init` picks the right file automatically:
-
-- **`pyproject.toml` exists** — appends a `[tool.runspec.<name>]` block, preserving all existing content
-- **Neither file exists** — creates `runspec.toml`
-- **`--file pyproject`** — targets `pyproject.toml` regardless (creates it if absent)
-- **`--file runspec`** — targets `runspec.toml` regardless
-
-If the target file already has a runspec section, `init` exits with an error
-and lists the existing runnables — it will not overwrite or merge.
+If `runspec.toml` already exists, `init` exits with an error and lists the existing
+runnables — it will not overwrite or merge.
 
 ### Example
 
 ```bash
-# In a fresh project directory:
 runspec init --name deploy
 ```
 
@@ -55,23 +43,8 @@ autonomy    = "confirm"
 # example = {type = "str", description = "An example argument"}
 ```
 
-Adding to an existing Python project:
-
-```bash
-cd my-python-project   # pyproject.toml already exists
-runspec init --name process
-```
-
-Appends to `pyproject.toml`:
-
-```toml
-[tool.runspec.process]
-description = "Describe what process does"
-autonomy    = "confirm"
-
-[tool.runspec.process.args]
-# example = {type = "str", description = "An example argument"}
-```
+Move the file inside your package directory (e.g. `mypkg/runspec.toml`) before
+publishing so it is included as package data automatically.
 
 Then fill in the description, declare your args, and run `runspec check` to validate.
 
@@ -89,7 +62,6 @@ runspec check
 Checks performed:
 
 - Config file found (searches up from the current directory)
-- `[project.scripts]` present (needed for agent auto-discovery)
 - No reserved names (`config` is reserved)
 - Every runnable has a `description` (agents need this)
 - Every runnable has an `autonomy` level declared
@@ -99,8 +71,7 @@ Checks performed:
 ### Example output
 
 ```
-  ✓  Config found: /home/user/project/pyproject.toml
-  ✓  [project.scripts] found — 2 entry point(s)
+  ✓  Config found: /home/user/project/mypkg/runspec.toml
   ✓  'deploy' — description present
   ✓  'deploy' — autonomy: manual
   ✓  'process' — description present
@@ -128,32 +99,24 @@ runspec discover [--format text|json|mcp|openai|anthropic]
 
 Discovers runnables in two places:
 
-1. **Local** — searches up from the current directory for `pyproject.toml` or `runspec.toml`
-2. **Installed** — finds packages in the current Python environment that list `runspec` as a dependency, then locates their spec
+1. **Local** — searches up from the current directory for `runspec.toml`
+2. **Installed** — finds packages in the current Python environment that list `runspec` as a dependency, then locates their `runspec.toml`
 
 ### Making your package discoverable
 
 When another developer `pip install`s your package, `discover` will find it
-automatically if:
-
-- You ship a standalone `runspec.toml` inside your Python package directory,
-  **and** declare it as package data in `pyproject.toml`:
+automatically if you ship `runspec.toml` inside your Python package directory
+(not at the project root). Modern build backends (flit, hatch, setuptools)
+include files inside the package directory automatically — no extra configuration needed:
 
 ```
 mypackage/
   __init__.py
-  runspec.toml     ← inside the package, not at the project root
-```
-
-```toml
-# pyproject.toml
-[tool.setuptools.package-data]
-mypackage = ["runspec.toml"]
+  runspec.toml     ← inside the package, auto-included as package data
 ```
 
 If your package is installed in editable mode (`pip install -e .`), discovery
-works automatically with either `runspec.toml` or `[tool.runspec]` in
-`pyproject.toml` — no special packaging needed.
+searches package subdirectories of the source directory automatically.
 
 ### Formats
 
@@ -166,7 +129,7 @@ runspec discover
 ```
 Found 3 runspec-aware runnable(s):
 
-  /home/user/project/pyproject.toml
+  /home/user/project/mypkg/runspec.toml
     • deploy
     • process
     • validate
@@ -183,7 +146,7 @@ runspec discover --format json
 ```json
 [
   {
-    "source": "/home/user/project/pyproject.toml",
+    "source": "/home/user/project/mypkg/runspec.toml",
     "runnable": "deploy",
     "spec": { ... }
   }
@@ -306,6 +269,7 @@ runspec serve [options]
 
 | Flag | Description |
 |---|---|
+| `--dev` | Development mode: aggregate all `runspec.toml` files under the nearest `.git` root. Registry disabled. |
 | `--registry <url>` | Registry URL. Overrides `[config] registry`. |
 | `--name <name>` | Instance name. Overrides `[config] name`. |
 | `--registry-key <key>` | API key for registry write endpoint authentication. |
@@ -491,6 +455,7 @@ is interpreted by `runspec run`.
 
 | Flag | Description |
 |---|---|
+| `--dev` | Development mode: discover tools from all `runspec.toml` files under the nearest `.git` root. Scripts resolved from venv bin/ first, then the TOML directory. |
 | `--host <host>` | Remote host to run on. Triggers SSH mode. |
 | `--registry <url>` | Registry URL for remote mode. Overrides `[config] registry`. |
 | `--registry-key <key>` | API key for registry read endpoints. |
@@ -506,7 +471,7 @@ Paramiko is required for remote execution: `pip install 'runspec[run]'`.
 With no tool name, `runspec run` lists what is available:
 
 ```bash
-# From the local runspec.toml / pyproject.toml
+# From the local runspec.toml
 runspec run
 
 # From a registry
@@ -533,9 +498,11 @@ sudo -u oracle runspec run backup-logs -- --days 14
 ```
 
 `runspec run` reads `runspec.toml` to find the tool, then locates its
-installed executable (the entry point from `[project.scripts]`, or the script
-on `PATH`). All resolved argument values are available to the script as
-`RUNSPEC_*` environment variables.
+installed executable from the venv `bin/` directory. All resolved argument
+values are available to the script as `RUNSPEC_*` environment variables.
+
+Use `--dev` when the script is not yet installed — it looks in the venv `bin/`
+first, then falls back to the TOML directory for scripts under development.
 
 ### Remote mode
 
@@ -642,12 +609,20 @@ Hyphens become underscores. `RUNSPEC_AGENT=1` is always set.
 Defaults from the spec are always present — the script never receives an unset
 variable for a declared arg.
 
-### Scripts must live alongside runspec.toml
+### Script discovery
 
-`runspec serve` only looks for scripts in two places: the venv `bin/` (for
-Python and Node entry points) and the directory containing your `runspec.toml`
-or its `bin/` subdirectory. Arbitrary paths elsewhere on the filesystem are
-not supported.
+`runspec serve` and `runspec run` use identical discovery logic:
+
+**Production mode** (no `--dev`): looks in the venv `bin/` only — exact name
+match, `.exe` on Windows. This is how Python and Node entry points are found
+after `pip install` or `npm install`.
+
+**Development mode** (`--dev`): looks in the venv `bin/` first, then falls back
+to the directory containing the `runspec.toml` as a convenience for scripts
+that are not yet installed. This avoids requiring `pip install -e .` during
+early development.
+
+Arbitrary paths elsewhere on the filesystem are not supported.
 
 This is intentional — it keeps tool collections self-contained, version
 controlled, and auditable. If you have existing scripts scattered across

@@ -154,7 +154,7 @@ installed — with no per-tool configuration.
 ```
 Found 3 runspec-aware runnable(s):
 
-  /home/user/project/pyproject.toml
+  /home/user/project/mypkg/runspec.toml
     • deploy
     • process
     • validate

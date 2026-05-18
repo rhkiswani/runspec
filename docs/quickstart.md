@@ -16,54 +16,26 @@ pip install runspec
 
 ---
 
-## 2. Choose your config format
+## 2. Create your config
 
 !!! tip "New project?"
     Run `runspec init --name greet` to scaffold the config automatically, then fill in the details and continue from step 3.
 
-runspec supports two config formats. Use whichever fits your project.
+Create `hello/runspec.toml` inside your package directory:
 
-=== "pyproject.toml"
+```toml
+[greet]
+description = "Greet someone from the command line"
+autonomy    = "autonomous"
 
-    Best for Python projects — everything lives in one file.
+[greet.args]
+name  = {type = "str"}
+loud  = {default = false}
+times = {default = 1}
+```
 
-    ```toml
-    [project]
-    name = "hello"
-    version = "0.1.0"
-    dependencies = ["runspec"]
-
-    [project.scripts]
-    greet = "hello.greet:main"  # wires the command to your function
-
-    [tool.runspec.greet]
-    description = "Greet someone from the command line"
-    autonomy    = "autonomous"
-
-    [tool.runspec.greet.args]
-    name  = {type = "str"}
-    loud  = {default = false}
-    times = {default = 1}
-    ```
-
-=== "runspec.toml"
-
-    Best for non-Python projects, monorepos, or when you want the interface
-    spec separate from your package config.
-
-    ```toml
-    [greet]
-    description = "Greet someone from the command line"
-    autonomy    = "autonomous"
-
-    [greet.args]
-    name  = {type = "str"}
-    loud  = {default = false}
-    times = {default = 1}
-    ```
-
-    The TOML format is identical across Python, Node, and Go — only the
-    setup step differs per language.
+The TOML format is identical across Python, Node, and Go — only the
+setup step differs per language.
 
 ---
 
@@ -83,9 +55,8 @@ def main():
         print(message)
 ```
 
-`parse()` finds your config automatically — no path required. It starts in
-the directory your runnable lives in and walks up until it finds a
-`pyproject.toml` with a `[tool.runspec]` section, or a `runspec.toml`.
+`parse()` finds your config automatically — no path required. It walks up
+from the current directory until it finds a `runspec.toml`.
 This means it works from anywhere in your project without configuration.
 
 ---
@@ -171,16 +142,16 @@ Every runnable declares an `autonomy` level — how much trust an AI agent
 should have when deciding whether to run it automatically or ask a human first.
 
 ```toml
-[tool.runspec.greet]
+[greet]
 description = "Greet someone from the command line"
 autonomy    = "autonomous"       # safe to run without asking
 
-[tool.runspec.deploy]
+[deploy]
 description     = "Deploy to production"
 autonomy        = "manual"
 autonomy-reason = "Irreversible — requires human approval"
 
-[tool.runspec.deploy.args]
+[deploy.args]
 environment = {options = ["staging", "production"]}
 dry-run     = {default = false}
 ```

@@ -4,6 +4,25 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.5.0 — 2026-05-18
+
+### Added
+
+**Recursive dev-mode discovery** — `runspec serve --dev` and `runspec run --dev`
+now scan the full directory tree under the nearest `.git` root (previously
+only one level deep). A monorepo with `packages/python/mypkg/runspec.toml`
+is found automatically. The walk skips `.venv`, `__pycache__`, `node_modules`,
+`dist`, `build`, and all hidden directories.
+
+### Changed
+
+**`runspec.toml` is now the sole supported format.** The option to read
+runspec configuration from `pyproject.toml` (under `[tool.runspec.*]`) has
+been removed. All documentation, specs, and examples have been updated to
+reflect this.
+
+---
+
 ## 0.3.0 — 2026-05-17
 
 ### Added
@@ -17,18 +36,16 @@ See the [Node Library](node.md) reference for full details.
 
 ---
 
-**`runspec init`** — scaffold a runspec config in the current directory.
-Creates `runspec.toml` or appends `[tool.runspec.<name>]` to an existing
-`pyproject.toml`, preserving all existing content. Available in both the Python
-and Node packages.
+**`runspec init`** — scaffold a `runspec.toml` in the current directory.
+Available in both the Python and Node packages.
 
 ```bash
 runspec init              # uses current directory name as the runnable name
 runspec init --name deploy
-runspec init --file runspec   # force runspec.toml even if pyproject.toml exists
 ```
 
-Refuses if a runspec section already exists, listing existing runnables.
+Refuses if `runspec.toml` already exists. Prints a reminder to move the file
+inside your package directory before publishing.
 See the [CLI reference](cli.md#runspec-init) for full details.
 
 ---

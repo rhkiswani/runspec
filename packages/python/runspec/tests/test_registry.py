@@ -320,7 +320,7 @@ def test_loader_normalises_registry_fields(tmp_path):
         '[config]\nname = "my-agent"\nregistry = "https://reg.example.com"\nheartbeat = 60\nheartbeat_data = ["system"]\n\n[greet]\ndescription = "hi"\n',
         encoding="utf-8",
     )
-    raw = load_raw(toml, "runspec")
+    raw = load_raw(toml)
     cfg = raw["config"]
     assert cfg["name"] == "my-agent"
     assert cfg["registry"] == "https://reg.example.com"
@@ -333,7 +333,7 @@ def test_loader_registry_defaults(tmp_path):
 
     toml = tmp_path / "runspec.toml"
     toml.write_text('[greet]\ndescription = "hi"\n', encoding="utf-8")
-    raw = load_raw(toml, "runspec")
+    raw = load_raw(toml)
     cfg = raw["config"]
     assert cfg["registry"] is None
     assert cfg["heartbeat"] == 30
@@ -349,7 +349,7 @@ def test_loader_normalises_hosts_and_run_as(tmp_path):
         '[greet]\ndescription = "hi"\nhosts = ["server-01", "server-02"]\nrun_as = "oracle"\nbecome_method = "sudo"\nbecome_flags = "-H"\n',
         encoding="utf-8",
     )
-    raw = load_raw(toml, "runspec")
+    raw = load_raw(toml)
     r = raw["runnables"]["greet"]
     assert r["hosts"] == ["server-01", "server-02"]
     assert r["run_as"] == "oracle"
@@ -365,7 +365,7 @@ def test_loader_run_as_table_form(tmp_path):
         '[greet]\ndescription = "hi"\n\n[greet.run_as]\ndefault = "oracle"\n\n[greet.run_as.hosts]\n"special-box" = "dba"\n',
         encoding="utf-8",
     )
-    raw = load_raw(toml, "runspec")
+    raw = load_raw(toml)
     run_as = raw["runnables"]["greet"]["run_as"]
     assert run_as["default"] == "oracle"
     assert run_as["hosts"]["special-box"] == "dba"
@@ -376,6 +376,6 @@ def test_loader_become_method_default(tmp_path):
 
     toml = tmp_path / "runspec.toml"
     toml.write_text('[greet]\ndescription = "hi"\n', encoding="utf-8")
-    raw = load_raw(toml, "runspec")
+    raw = load_raw(toml)
     assert raw["runnables"]["greet"]["become_method"] == "sudo"
     assert raw["runnables"]["greet"]["become_flags"] is None

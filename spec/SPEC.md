@@ -11,39 +11,43 @@ All language pack implementations are tested against this specification.
 ## Overview
 
 A runspec defines the interface of anything runnable — a script, application,
-or MCP tool. It lives in one of two places:
+or MCP tool. It lives in `runspec.toml` inside the package directory, alongside
+the code it describes.
 
-1. `pyproject.toml` under `[tool.runspec]` (Python projects)
-2. `runspec.toml` at the project root (all other projects)
+```
+mypkg/
+  runspec.toml    ← lives here, not at the project root
+```
 
-The format is identical in both cases. The outer wrapper differs only in
-how TOML nesting works.
+This location means build backends include it automatically as package data,
+and `importlib.metadata` can locate it after install — no extra configuration needed.
 
 ---
 
 ## File Lookup Order
 
-Implementations must search in this order, using the first match found:
+Implementations must use the following lookup strategy depending on context:
 
-1. `pyproject.toml` → `[tool.runspec]` section, cross-referenced with `[project.scripts]`
-2. `runspec.toml` in the current directory
-3. Walk up parent directories repeating 1 and 2
-4. For installed packages: `runspec.toml` shipped as package data
+**Installed packages:**
+1. Locate via `importlib.metadata` — find `runspec.toml` in installed package files
+2. Any package that declares `runspec` as a dependency is a candidate
+
+**Local development (`runspec serve --dev`):**
+1. Walk up from cwd until `.git/` is found — that is the project root
+2. Walk down one level from the project root, collect all `runspec.toml` files found
+3. Aggregate all runnables from all found configs into a unified tool list
+4. If no `.git/` found, use cwd as the project root
+
+**Single-package commands (`runspec run`, `check`, `emit`):**
+1. Walk up from cwd, return the first `runspec.toml` found
 
 ---
 
 ## Top-Level Structure
 
 ```toml
-[tool.runspec.config]         # optional project-wide defaults
-[tool.runspec.<name>] # one section per runnable
-```
-
-In a standalone `runspec.toml`, omit the `tool.runspec` prefix:
-
-```toml
-[config]
-[<name>]
+[config]     # optional project-wide defaults
+[<name>]     # one section per runnable
 ```
 
 ---
@@ -66,11 +70,11 @@ Project-wide defaults. All fields are optional.
 
 ## Runnable Definition
 
-Runnables are defined directly under `[tool.runspec]` in `pyproject.toml`,
-or at the top level of `runspec.toml`. The reserved name `config` is excluded.
+Runnables are defined at the top level of `runspec.toml`. The reserved name
+`config` is excluded — everything else is a runnable.
 
 ```toml
-[tool.runspec.<name>]
+[<name>]
 description     = "Human and agent readable description"  # recommended
 autonomy        = "confirm"                               # optional
 autonomy-reason = "Why this level was chosen"             # optional
@@ -214,7 +218,7 @@ on target hosts.
 
 ## Argument Definition
 
-Arguments live under `[tool.runspec.<name>.args]`.
+Arguments live under `[<name>.args]`.
 
 ### Three levels of verbosity
 
@@ -233,7 +237,7 @@ format    = {options = ["json", "csv"], default = "json"}
 
 **Full block** — for args needing prose descriptions:
 ```toml
-[tool.runspec.<name>.args.quality]
+[<name>.args.quality]
 default     = 85
 range       = [1, 100]
 description = "Controls output quality. Values below 60 rarely useful."
@@ -375,41 +379,41 @@ aws s3 sync "/var/log/app/$RUNSPEC_ENV" "s3://logs-$RUNSPEC_ENV" \
 ## Groups
 
 Groups define relationships between arguments.
-They live under `[tool.runspec.<name>.groups.<group-name>]`.
+They live under `[<name>.groups.<group-name>]`.
 
 ### Group Types
 
 **Mutually exclusive** — at most one arg from the group may be provided:
 ```toml
-[tool.runspec.<name>.groups.output]
+[<name>.groups.output]
 exclusive = true
 args      = ["format", "raw"]
 ```
 
 **Mutually inclusive** — if any arg is provided, all must be:
 ```toml
-[tool.runspec.<name>.groups.auth]
+[<name>.groups.auth]
 inclusive = true
 args      = ["username", "password"]
 ```
 
 **At least one** — one or more must be provided:
 ```toml
-[tool.runspec.<name>.groups.input]
+[<name>.groups.input]
 at-least-one = true
 args         = ["input-file", "input-dir", "input-glob"]
 ```
 
 **Exactly one** — strictly one must be provided:
 ```toml
-[tool.runspec.<name>.groups.mode]
+[<name>.groups.mode]
 exactly-one = true
 args        = ["fast", "balanced", "quality"]
 ```
 
 **Conditional** — if one arg is provided, others become required:
 ```toml
-[tool.runspec.<name>.groups.upload]
+[<name>.groups.upload]
 if       = "upload"
 requires = ["bucket", "region"]
 ```
@@ -423,18 +427,18 @@ An agent can never escalate beyond what the spec allows.
 
 ## Subcommands
 
-Subcommands live under `[tool.runspec.<name>.commands.<subcommand>]`.
+Subcommands live under `[<name>.commands.<subcommand>]`.
 Each subcommand has its own `args`, `groups`, `autonomy`, and `description`.
 
 ```toml
-[tool.runspec.pipeline.commands.run]
+[pipeline.commands.run]
 description = "Run the pipeline"
 autonomy    = "confirm"
 
-[tool.runspec.pipeline.commands.run.args]
+[pipeline.commands.run.args]
 input = {type = "path"}
 
-[tool.runspec.pipeline.commands.validate]
+[pipeline.commands.validate]
 description = "Validate without running"
 autonomy    = "autonomous"
 ```

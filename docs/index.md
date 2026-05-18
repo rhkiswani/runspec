@@ -26,21 +26,19 @@ Define your runnable's interface once in TOML. Get a CLI, validation,
     Node.js and TypeScript.
 
 ```toml
-[project.scripts]
-greet = "hello.greet:main"   # Python-specific — see Node/Go docs for equivalent
-
-[tool.runspec.greet]         # runspec picks up the same name
+# hello/runspec.toml — lives inside your package directory
+[greet]
 description = "Greet someone from the command line"
 autonomy    = "autonomous"
 
-[tool.runspec.greet.args]
+[greet.args]
 name  = {type = "str"}
 loud  = {default = false}
 times = {default = 1}
 ```
 
-The name `greet` in `[project.scripts]` is what you type on the command line.
-The matching `[tool.runspec.greet]` section is where you define its interface.
+The section name `[greet]` is what you type on the command line.
+Your entry point name must match — that's how runspec connects the spec to your runnable.
 The `runspec.toml` format is identical across all languages.
 
 ## Use it in your runnable

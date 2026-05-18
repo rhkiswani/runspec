@@ -231,8 +231,7 @@ Content-Type: application/json
 
 ## Config reference
 
-All registry settings live under `[config]` in `runspec.toml` or
-`pyproject.toml`:
+All registry settings live under `[config]` in `runspec.toml`:
 
 ```toml
 [config]

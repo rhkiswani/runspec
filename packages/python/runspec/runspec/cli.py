@@ -54,7 +54,7 @@ def cmd_discover(args: list[str]) -> None:
 
     if not discovered:
         print("No runspec-aware runnables found in this environment.")
-        print("Add a [tool.runspec.yourname] section to pyproject.toml or create runspec.toml")
+        print("Create a runspec.toml inside your package directory and run 'runspec init' to get started.")
         return
 
     if fmt == "text":
@@ -78,26 +78,18 @@ def cmd_check(args: list[str]) -> None:
     from runspec.loader import load_raw
 
     try:
-        config_path, fmt = find_config(Path.cwd())
+        config_path = find_config(Path.cwd())
     except FileNotFoundError as e:
         print(str(e))
         sys.exit(1)
 
-    raw = load_raw(config_path, fmt)
+    raw = load_raw(config_path)
     errors: list[str] = []
     warnings: list[str] = []
     ok: list[str] = []
 
     # Check config file found
     ok.append(f"Config found: {config_path}")
-
-    # Check entry points if pyproject.toml
-    if fmt == "pyproject":
-        entry_points = raw.get("entry_points", {})
-        if entry_points:
-            ok.append(f"[project.scripts] found — {len(entry_points)} entry point(s)")
-        else:
-            warnings.append("No [project.scripts] found — agents may not discover runnables automatically\n  Add entry points to pyproject.toml or use runspec.toml")
 
     # Check for reserved name
     if "config" in raw["runnables"]:
@@ -150,7 +142,8 @@ def cmd_serve(args: list[str]) -> None:
     name = _get_flag(args, "--name")
     registry_key = _get_flag(args, "--registry-key")
     registry_cert = _get_flag(args, "--registry-cert")
-    serve(registry_url=registry_url, name=name, registry_key=registry_key, registry_cert=registry_cert)
+    dev = "--dev" in args
+    serve(registry_url=registry_url, name=name, registry_key=registry_key, registry_cert=registry_cert, dev=dev)
 
 
 def cmd_run(args: list[str]) -> None:
@@ -173,6 +166,7 @@ def cmd_run(args: list[str]) -> None:
     ssh_user = _get_flag(runspec_args, "--user")
     ssh_key = _get_flag(runspec_args, "--ssh-key")
     no_host_key_check = "--no-host-key-check" in runspec_args
+    dev = "--dev" in runspec_args
 
     # First positional arg (not starting with --) is the tool name
     tool_name = next((a for a in runspec_args if not a.startswith("-")), None)
@@ -194,7 +188,7 @@ def cmd_run(args: list[str]) -> None:
         else:
             tools = list_local_tools()
             if not tools:
-                print("No tools found in local runspec.toml / pyproject.toml.")
+                print("No tools found in local runspec.toml.")
                 print("Run 'runspec init' to get started.")
                 return
             print("Local tools:\n")
@@ -214,8 +208,8 @@ def cmd_run(args: list[str]) -> None:
             from runspec.loader import load_raw
 
             try:
-                config_path, fmt = find_config(_Path.cwd())
-                raw = load_raw(config_path, fmt)
+                config_path = find_config(_Path.cwd())
+                raw = load_raw(config_path)
                 effective_registry = raw["config"].get("registry")
             except FileNotFoundError:
                 pass
@@ -238,27 +232,19 @@ def cmd_run(args: list[str]) -> None:
         sys.exit(rc)
     else:
         # Local mode
-        rc = run_local(tool_name, tool_args)
+        rc = run_local(tool_name, tool_args, dev=dev)
         sys.exit(rc)
 
 
 def cmd_init(args: list[str]) -> None:
-    """Create or update pyproject.toml or runspec.toml with a runspec scaffold."""
+    """Create runspec.toml with a runspec scaffold."""
     name_flag = _get_flag(args, "--name")
-    file_flag = _get_flag(args, "--file")
 
     cwd = Path.cwd()
     runnable_name = name_flag or _sanitize_name(cwd.name)
-
-    pyproject = cwd / "pyproject.toml"
     runspec_toml = cwd / "runspec.toml"
 
-    if file_flag == "runspec":
-        _init_runspec_toml(runspec_toml, runnable_name)
-    elif file_flag == "pyproject" or pyproject.exists():
-        _init_pyproject(pyproject, runnable_name)
-    else:
-        _init_runspec_toml(runspec_toml, runnable_name)
+    _init_runspec_toml(runspec_toml, runnable_name)
 
 
 def _sanitize_name(raw: str) -> str:
@@ -268,33 +254,6 @@ def _sanitize_name(raw: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
     return s or "myscript"
 
-
-def _init_pyproject(path: Path, name: str) -> None:
-    """Add a runspec scaffold to pyproject.toml (create if absent)."""
-    if path.exists():
-        original = path.read_text(encoding="utf-8")
-        try:
-            data = _load_toml_file(path)
-        except Exception as e:
-            print(f"✗  Could not read {path.name}: {e}")
-            sys.exit(1)
-
-        if "runspec" in data.get("tool", {}):
-            existing = [k for k, v in data["tool"]["runspec"].items() if k != "config" and isinstance(v, dict)]
-            print(f"✗  {path.name} already has [tool.runspec] — already initialized")
-            if existing:
-                print(f"   Existing runnables: {', '.join(existing)}")
-            sys.exit(1)
-
-        content = original.rstrip("\n") + "\n\n" + _pyproject_block(name)
-    else:
-        original = None
-        content = _pyproject_block(name)
-
-    _write_and_verify(path, content, original)
-    action = "Updated" if original is not None else "Created"
-    print(f"  ✓  {action} {path.name} with [{name}] runnable")
-    print("     Run 'runspec check' to validate.")
 
 
 def _init_runspec_toml(path: Path, name: str) -> None:
@@ -307,13 +266,9 @@ def _init_runspec_toml(path: Path, name: str) -> None:
     content = _runspec_toml_block(name)
     _write_and_verify(path, content, None)
     print(f"  ✓  Created {path.name} with [{name}] runnable")
+    print("     Move it inside your package directory (e.g. mypkg/runspec.toml) before publishing.")
     print("     Run 'runspec check' to validate.")
 
-
-def _pyproject_block(name: str) -> str:
-    return (
-        f'[tool.runspec.{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[tool.runspec.{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n'
-    )
 
 
 def _runspec_toml_block(name: str) -> str:
@@ -357,12 +312,12 @@ def cmd_emit(args: list[str]) -> None:
     from runspec.loader import load_raw
 
     try:
-        config_path, file_fmt = find_config(Path.cwd())
+        config_path = find_config(Path.cwd())
     except FileNotFoundError as e:
         print(str(e))
         sys.exit(1)
 
-    raw = load_raw(config_path, file_fmt)
+    raw = load_raw(config_path)
     config = raw["config"]
 
     if script_name:
@@ -457,13 +412,13 @@ def _arg_to_json_schema(arg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _discover_local() -> list[dict[str, Any]]:
-    """Look for runspec config in the current directory."""
+    """Look for runspec.toml in or above the current directory."""
     from runspec.finder import find_config
     from runspec.loader import load_raw
 
     try:
-        config_path, fmt = find_config(Path.cwd())
-        raw = load_raw(config_path, fmt)
+        config_path = find_config(Path.cwd())
+        raw = load_raw(config_path)
         return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
     except FileNotFoundError:
         return []
@@ -520,7 +475,7 @@ def _check_dist_files(dist: Any) -> list[dict[str, Any]]:
         if f.name == "runspec.toml":
             try:
                 config_path = Path(str(f.locate())).resolve()
-                raw = load_raw(config_path, "runspec")
+                raw = load_raw(config_path)
                 if not raw["runnables"]:
                     return []
                 return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
@@ -533,14 +488,13 @@ def _check_dist_files(dist: Any) -> list[dict[str, Any]]:
 def _check_editable_source(dist: Any) -> list[dict[str, Any]]:
     """
     Strategy 2: editable install — read direct_url.json to find the source
-    directory, then look for pyproject.toml with [tool.runspec] or runspec.toml.
+    directory, then search package subdirectories for runspec.toml files.
     Returns discovered items or [] if not applicable.
     """
     import json as _json
     from urllib.parse import urlparse
     from urllib.request import url2pathname
 
-    from runspec.finder import find_config
     from runspec.loader import load_raw
 
     if dist.files is None:
@@ -566,14 +520,24 @@ def _check_editable_source(dist: Any) -> list[dict[str, Any]]:
     if not source_dir.is_dir():
         return []
 
+    discovered: list[dict[str, Any]] = []
     try:
-        config_path, fmt = find_config(source_dir)
-        raw = load_raw(config_path, fmt)
-        if not raw["runnables"]:
-            return []
-        return [{"source": str(config_path), "runnable": name, "spec": spec} for name, spec in raw["runnables"].items()]
-    except FileNotFoundError:
-        return []
+        for subdir in sorted(source_dir.iterdir()):
+            if not subdir.is_dir() or subdir.name.startswith("."):
+                continue
+            candidate = subdir / "runspec.toml"
+            if not candidate.exists():
+                continue
+            try:
+                raw = load_raw(candidate)
+                for name, spec in raw["runnables"].items():
+                    discovered.append({"source": str(candidate), "runnable": name, "spec": spec})
+            except Exception:
+                continue
+    except PermissionError:
+        pass
+
+    return discovered
 
 
 def _deduplicate(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -631,7 +595,7 @@ Usage:
   runspec <command> [options]
 
 Commands:
-  init        Create or update pyproject.toml or runspec.toml with a scaffold
+  init        Create runspec.toml with a scaffold
   discover    Find all runspec-aware runnables in this environment
   check       Validate this project's runspec setup
   emit        Emit tool schemas for agent frameworks
@@ -640,6 +604,7 @@ Commands:
 
 Options for run:
   <tool>               Tool name to run (omit to list available tools)
+  --dev                Development mode: discover runnables under the nearest .git root
   --host <host>        Remote host to run on (requires --registry or [config] registry)
   --registry <url>     Registry base URL
   --registry-key <k>   API key for registry read endpoints
@@ -650,6 +615,7 @@ Options for run:
   --                   Separator: everything after is passed to the tool
 
 Options for serve:
+  --dev            Development mode: discover runnables under the nearest .git root
   --registry       Registry base URL (overrides [config] registry)
   --name           Instance name reported to registry (overrides [config] name)
   --registry-key   API key for registry write endpoints
@@ -657,7 +623,6 @@ Options for serve:
 
 Options for init:
   --name      Runnable name (default: current directory name)
-  --file      Target file: pyproject or runspec (auto-detected if omitted)
 
 Options for discover:
   --format    Output format: text (default), json, mcp, openai, anthropic
@@ -670,9 +635,11 @@ Examples:
   runspec run                                    # list local tools
   runspec run deploy                             # run locally
   runspec run deploy -- --env prod               # run locally with args
+  runspec run --dev deploy                       # run in dev mode
   runspec run deploy --host server-01            # run remotely via SSH
   runspec run deploy --host server-01 -- --env prod
   runspec init
   runspec check
   runspec serve --registry http://registry:8080
+  runspec serve --dev
 """)

@@ -1,10 +1,8 @@
 """
-Tests for runspec init — creates or updates pyproject.toml / runspec.toml.
+Tests for runspec init — creates runspec.toml with a scaffold.
 """
 
 from __future__ import annotations
-
-import sys
 
 import pytest
 
@@ -62,68 +60,6 @@ def test_creates_runspec_toml_default_name(tmp_path, monkeypatch):
     assert f"[{name}]" in toml.read_text()
 
 
-# ── appends to existing pyproject.toml ───────────────────────────────────────
-
-
-def test_appends_to_pyproject(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[project]\nname = "myproject"\n', encoding="utf-8")
-
-    cmd_init(["--name", "deploy"])
-
-    content = pyproject.read_text()
-    assert "[tool.runspec.deploy]" in content
-    assert '[project]\nname = "myproject"' in content  # original preserved
-
-
-def test_appends_preserves_existing_content(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    pyproject = tmp_path / "pyproject.toml"
-    original = '[project]\nname = "myproject"\nversion = "1.0"\n'
-    pyproject.write_text(original, encoding="utf-8")
-
-    cmd_init(["--name", "deploy"])
-
-    content = pyproject.read_text()
-    assert 'name = "myproject"' in content
-    assert 'version = "1.0"' in content
-    assert "[tool.runspec.deploy]" in content
-
-
-def test_creates_pyproject_when_absent_with_file_flag(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    cmd_init(["--name", "greeter", "--file", "pyproject"])
-
-    pyproject = tmp_path / "pyproject.toml"
-    assert pyproject.exists()
-    assert "[tool.runspec.greeter]" in pyproject.read_text()
-
-
-# ── --file flag overrides auto-detection ─────────────────────────────────────
-
-
-def test_file_flag_runspec_when_pyproject_exists(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[project]\nname = "x"\n', encoding="utf-8")
-
-    cmd_init(["--name", "myscript", "--file", "runspec"])
-
-    assert (tmp_path / "runspec.toml").exists()
-    assert "[tool.runspec" not in pyproject.read_text()
-
-
-def test_file_flag_pyproject_when_runspec_exists(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
-
-    cmd_init(["--name", "myscript", "--file", "pyproject"])
-
-    assert "[tool.runspec.myscript]" in (tmp_path / "pyproject.toml").read_text()
-    assert not (tmp_path / "runspec.toml").exists()
-
-
 # ── idempotency — refuse if already initialized ──────────────────────────────
 
 
@@ -137,22 +73,6 @@ def test_refuses_if_runspec_toml_exists(tmp_path, monkeypatch, capsys):
     assert "already exists" in capsys.readouterr().out
 
 
-def test_refuses_if_pyproject_has_runspec(tmp_path, monkeypatch, capsys):
-    monkeypatch.chdir(tmp_path)
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text(
-        '[project]\nname = "x"\n\n[tool.runspec.greeter]\ndescription = "hi"\n',
-        encoding="utf-8",
-    )
-
-    with pytest.raises(SystemExit) as exc:
-        cmd_init(["--name", "deploy"])
-    assert exc.value.code == 1
-    out = capsys.readouterr().out
-    assert "already initialized" in out
-    assert "greeter" in out
-
-
 # ── generated files are valid TOML and parseable by runspec ──────────────────
 
 
@@ -162,36 +82,5 @@ def test_runspec_toml_is_valid(tmp_path, monkeypatch):
 
     from runspec.loader import load_raw
 
-    raw = load_raw(tmp_path / "runspec.toml", "runspec")
+    raw = load_raw(tmp_path / "runspec.toml")
     assert "myscript" in raw["runnables"]
-
-
-def test_pyproject_block_is_valid(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
-    cmd_init(["--name", "deploy"])
-
-    from runspec.loader import load_raw
-
-    raw = load_raw(tmp_path / "pyproject.toml", "pyproject")
-    assert "deploy" in raw["runnables"]
-
-
-def test_pyproject_after_append_is_valid_toml(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text(
-        '[project]\nname = "myproject"\nversion = "1.0"\n\n[project.dependencies]\n',
-        encoding="utf-8",
-    )
-    cmd_init(["--name", "run"])
-
-    if sys.version_info >= (3, 11):
-        import tomllib
-    else:
-        import tomli as tomllib  # type: ignore[no-redef]
-
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
-    assert "runspec" in data.get("tool", {})
-    assert "run" in data["tool"]["runspec"]

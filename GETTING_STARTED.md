@@ -165,7 +165,7 @@ Once you're comfortable, this is a good first real coding task:
 ```
 Read CLAUDE.md. Then read loader.py. Write a test file at
 packages/python/runspec/tests/test_loader.py that tests the load_raw function
-for both pyproject.toml format and runspec.toml format. Use the fixtures
+for the runspec.toml format. Use the fixtures
 in tests/integration/fixtures/ as reference for what valid TOML looks like.
 ```
 

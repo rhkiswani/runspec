@@ -3,9 +3,9 @@
 ## What this project is
 
 A language-agnostic, TOML-based interface specification for anything runnable.
-Runnables (scripts, apps, MCP tools) define their interface in `runspec.toml` or
-`pyproject.toml` under `[tool.runspec.<name>]`. The library parses this at runtime,
-validates arguments, and exposes a rich `RunSpec` object.
+Runnables (scripts, apps, MCP tools) define their interface in `runspec.toml`
+inside the package directory. The library parses this at runtime, validates
+arguments, and exposes a rich `RunSpec` object.
 
 Read `DESIGN.md` for the full design history and rationale.
 Read `spec/SPEC.md` for the canonical format specification.
@@ -23,7 +23,7 @@ runspec/
     python/                        ← active development, reference implementation
       runspec/
         __init__.py                ← public API: parse(), load_spec(), register_type()
-        finder.py                  ← locates pyproject.toml or runspec.toml
+        finder.py                  ← locates runspec.toml
         loader.py                  ← reads TOML, normalises to internal dict
         inference.py               ← applies inference rules
         types.py                   ← type registry + runspec-python coercers
@@ -57,10 +57,10 @@ runspec/
 ## Key Design Decisions
 
 **Format**
-- Runnables live directly under `[tool.runspec]` — no intermediate `scripts` key
-- `[tool.runspec.greeter]` not `[tool.runspec.scripts.greeter]`
+- `runspec.toml` is the only supported config format — no `pyproject.toml` support
+- `runspec.toml` lives inside the package directory (e.g. `mypkg/runspec.toml`), not at the project root
+- Runnables are top-level sections: `[greeter]`
 - `[config]` is the only reserved name — everything else is a runnable
-- In standalone `runspec.toml`, runnables are top-level: `[greeter]`
 
 **Internally**
 - Code uses `runnables` as the dict key (not `scripts`)
@@ -81,9 +81,14 @@ runspec/
 - Escalation rule: most restrictive level wins
 
 **Entry points**
-- `[project.scripts]` is the preferred convention (PEP 517/518)
-- `[tool.poetry.scripts]` supported as fallback with a nudge
+- Entry point name must match the runspec runnable name — enforced by convention
 - `runspec` binary auto-appears when added as a dependency
+- Script discovery: venv bin only (production); venv bin then TOML directory (--dev)
+
+**Discovery**
+- Production: importlib.metadata only — installed packages, no filesystem scanning
+- `runspec serve --dev`: walk up to `.git/` as project root, recurse down (skipping `.venv`, `__pycache__`, `node_modules`, etc.) to collect all `runspec.toml` files
+- `.git` is the only project boundary marker — language agnostic
 
 ---
 
@@ -133,9 +138,12 @@ mypy runspec/
 
 - Add runtime dependencies to the core library (stdlib only)
 - Use `scripts` as a TOML key in runspec format examples
+- Use `[tool.runspec.*]` format — `runspec.toml` only, always
+- Put `runspec.toml` at the project root in examples — it belongs inside the package directory
 - Change inference rules without updating `spec/SPEC.md` first
 - Change the format without updating `spec/SPEC.md` first
 - Name internal variables using the format key names (use `runnables`, not `scripts`)
+- Use language-specific files (pyproject.toml, package.json) as project boundary markers — use `.git` only
 
 ---
 
@@ -154,7 +162,7 @@ Be specific and bounded. Examples of good prompts:
 
 ```
 Read CLAUDE.md. Then look at loader.py and write tests for load_raw
-covering both pyproject.toml and runspec.toml formats. Put them in
+covering the runspec.toml format. Put them in
 packages/python/tests/test_loader.py.
 ```
 

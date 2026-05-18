@@ -14,7 +14,7 @@ application   → long-lived, inputs arrive via UI or API
 MCP tool      → runs on demand, inputs are tool call parameters
 ```
 
-Everything under `[tool.runspec]` except `[tool.runspec.config]` is a runnable. The name you choose — greeter, pipeline, send-report — is the only identifier needed.
+In `runspec.toml`, everything except `[config]` is a runnable. The name you choose — greeter, pipeline, send-report — is the only identifier needed.
 
 ---
 
@@ -62,7 +62,7 @@ Interface definitions for runnables are buried in code. `argparse` configs requi
 
 ## The Solution
 
-A single `runspec.toml` file — or a `[tool.runspec]` section inside `pyproject.toml` for Python projects — that:
+A single `runspec.toml` file — inside the package directory, shipping alongside the code — that:
 
 1. Is readable by humans without tooling
 2. Is readable by AI agents without conversion
@@ -74,56 +74,45 @@ A single `runspec.toml` file — or a `[tool.runspec]` section inside `pyproject
 
 ### Entry Points Convention
 
-`runspec` uses `[project.scripts]` as the primary convention for identifying installed scripts — this is the PEP 517/518 standard supported by every modern Python build backend (setuptools, hatchling, flit, PDM). By defaulting to this convention, runspec encourages correct modern packaging practice and integrates naturally with the Python ecosystem.
+The executable name must match the runspec runnable name — this is the one convention runspec requires. A runnable named `compress` in `runspec.toml` must have a corresponding `compress` entry point installed in the environment. The names are the join key between the packaging system and the spec.
 
 ```toml
-[project.scripts]
-compress = "mypackage.compress:main"
-greet    = "mypackage.greet:main"
-```
-
-runspec mirrors these names exactly in its spec sections:
-
-```toml
-[tool.runspec.compress]
+# mypkg/runspec.toml
+[compress]
 description = "Compress images in a directory"
 
-[tool.runspec.greet]
+[greet]
 description = "Greet someone from the command line"
 ```
 
-The names match deliberately — a developer reading the file sees the one-to-one relationship instantly. `runspec check` validates that every entry point has a matching runspec section and vice versa.
-
-**Auto-inference from entry points:** when `compress` is invoked as a binary, runspec traces it back through `[project.scripts]` to find the matching spec section automatically. `parse()` inside the script needs no arguments — it already knows which script it is.
-
-**Poetry projects:** `[tool.poetry.scripts]` is supported as a fallback for projects that haven't migrated to the standard convention. `runspec check` notes this with a gentle nudge rather than an error:
-
-```bash
-# ℹ Using [tool.poetry.scripts] — consider migrating to [project.scripts]
-#   for better compatibility with modern Python packaging tools.
-#   See: https://packaging.python.org/en/latest/guides/writing-pyproject-toml/
-```
-
-Not broken. Just a signpost toward better practice.
+This works with any language and any build system — the entry point mechanism is not Python-specific. Go binaries, Node scripts, shell scripts, and Python entry points all follow the same convention: the executable name is the runnable name.
 
 ### File Lookup Order
 
-`runspec` finds its config by walking up from the script's location:
+`runspec` finds its config depending on the execution context:
 
-1. `pyproject.toml` → `[tool.runspec]` section, cross-referenced with `[project.scripts]`
-2. `runspec.toml` at the project root (non-Python projects or projects without pyproject.toml)
-3. For installed packages — `runspec.toml` shipped as package data, located via `importlib.resources`
+**Installed packages (production):**
+- `runspec.toml` shipped inside the package directory and located via `importlib.metadata`
+- Works for any installed package that declares `runspec` as a dependency
 
-One file per project, multiple scripts within it — mirroring the `pyproject.toml` philosophy. No per-script sidecar files.
+**Local development (`runspec serve --dev`):**
+- Walk up from cwd until `.git/` is found — that is the project root
+- Walk down one level from the project root, collect all `runspec.toml` files found
+- `.git` is the only project boundary marker — language agnostic
+
+**Single-package commands (`runspec run`, `check`, `emit`):**
+- Walk up from cwd until `runspec.toml` is found
+- Works naturally when you are in or below a package directory
+
+One file per package, multiple runnables within it. No per-runnable sidecar files.
 
 ### Project-Wide Configuration
 
-A `[tool.runspec.config]` section sets project-wide defaults that apply to all scripts unless overridden:
+A `[config]` section sets project-wide defaults that apply to all scripts unless overridden:
 
 ```toml
-[tool.runspec.config]
+[config]
 autonomy-default = "confirm"   # autonomy when unspecified on a script
-lang             = "python"    # preferred language for runspec generate
 version          = "1"         # runspec spec version
 ```
 
@@ -132,7 +121,7 @@ version          = "1"         # runspec spec version
 ```
 per-arg autonomy declared        ← most specific, always wins
   ↓ script-level autonomy declared
-    ↓ [tool.runspec.config] autonomy-default
+    ↓ [config] autonomy-default
       ↓ library default: "confirm" ← safe by default, opt-in to trust
 ```
 
@@ -175,14 +164,14 @@ Most verbosity comes from spelling out things that can be inferred. `runspec` in
 
 **Level 1 — Bare value shorthand** (simplest args):
 ```toml
-[tool.runspec.compress.args]  # or [compress.args] in runspec.toml
+[compress.args]
 verbose = false      # flag, defaults to off
 workers = 4          # int arg, defaults to 4
 ```
 
 **Level 2 — Inline table** (most args):
 ```toml
-[tool.runspec.compress.args]
+[compress.args]
 input-dir  = {type = "path"}
 quality    = {default = 85, range = [1, 100]}
 format     = {options = ["jpeg", "png", "webp"], default = "jpeg"}
@@ -191,7 +180,7 @@ dry-run    = {default = false}
 
 **Level 3 — Full block** (complex args that need prose):
 ```toml
-[tool.runspec.compress.args.quality]
+[compress.args.quality]
 default = 85
 range = [1, 100]
 description = """
@@ -202,59 +191,44 @@ Values below 60 are rarely useful. Ignored for PNG output.
 
 Simple args stay on one line. Complex args get the space they need. You never pay verbosity tax uniformly.
 
-### The Canonical `pyproject.toml`
+### The Package Convention
 
-The complete picture in one file — entry points, runspec config, and script specs side by side:
+`runspec.toml` lives inside the package directory alongside the code. Build backends include it automatically — no extra configuration needed.
 
-```toml
-[project]
-name = "mypackage"
-version = "0.1.0"
-dependencies = ["runspec"]
-
-[project.scripts]
-compress = "mypackage.compress:main"
-greet    = "mypackage.greet:main"
-
-[tool.runspec.config]
-autonomy-default = "confirm"
-lang             = "python"
-version          = "1"
-
-[tool.runspec.compress]
-description = "Compress images in a directory"
-autonomy    = "confirm"
-autonomy-reason = "Overwrites files in place"
-
-[tool.runspec.compress.args]
-input-dir = {type = "path"}
-quality   = {default = 85, range = [1, 100]}
-format    = {options = ["jpeg", "png", "webp"], default = "jpeg"}
-dry-run   = {default = false}
-
-[tool.runspec.greet]
-description = "Greet someone from the command line"
-autonomy    = "autonomous"
-
-[tool.runspec.greet.args]
-name  = {type = "str"}
-loud  = {default = false}
-times = {default = 1}
+```
+mypkg/
+  __init__.py       ← (or equivalent for your language)
+  compress.py
+  greet.py
+  runspec.toml      ← ships with the package, found via importlib.metadata
 ```
 
+The complete `runspec.toml`:
+
 ```toml
-# runspec.toml — for non-Python projects (identical structure, no [tool] wrapper)
 [config]
 autonomy-default = "confirm"
+version          = "1"
 
 [compress]
 description = "Compress images in a directory"
+autonomy    = "confirm"
+autonomy-reason = "Overwrites files in place"
 
 [compress.args]
 input-dir = {type = "path"}
 quality   = {default = 85, range = [1, 100]}
 format    = {options = ["jpeg", "png", "webp"], default = "jpeg"}
 dry-run   = {default = false}
+
+[greet]
+description = "Greet someone from the command line"
+autonomy    = "autonomous"
+
+[greet.args]
+name  = {type = "str"}
+loud  = {default = false}
+times = {default = 1}
 ```
 
 ---
@@ -339,7 +313,7 @@ runspec discover --format json      # machine-readable for agents that parse dir
 runspec discover --format openai    # OpenAI tool definitions for all runnables
 ```
 
-For local projects (not installed), `runspec discover` also checks the current directory for `pyproject.toml` or `runspec.toml` and merges results. Installed packages and local projects are treated identically from the agent's perspective.
+For local projects (not installed), `runspec discover` also checks the current directory for `runspec.toml` and merges results. Installed packages and local projects are treated identically from the agent's perspective.
 
 ### `runspec check`
 
@@ -477,7 +451,7 @@ args.quality.source       # "cli" | "env" | "config" | "default"
 
 # The full spec is available on the object
 args.__script__           # "compress"
-args.__source__           # Path("pyproject.toml")
+args.__source__           # Path("mypkg/runspec.toml")
 args.__groups__           # list of Group objects
 args.__spec__             # full raw parsed spec dict
 ```
@@ -804,7 +778,7 @@ runspec.register_type(
 Then in the spec:
 
 ```toml
-[tool.runspec.process.args]
+[process.args]
 config = {type = "json-file"}   # reads and parses JSON automatically
 ```
 

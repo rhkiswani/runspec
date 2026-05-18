@@ -17,7 +17,7 @@ import runspec
 
 @pytest.fixture()
 def spec_dir(tmp_path, monkeypatch):
-    """Minimal runspec.toml in a temp dir, with finder pointed at it."""
+    """Minimal runspec.toml in a temp dir, with cwd pointed at it."""
     (tmp_path / "runspec.toml").write_text(
         textwrap.dedent("""\
             [greet]
@@ -29,7 +29,7 @@ def spec_dir(tmp_path, monkeypatch):
         """),
         encoding="utf-8",
     )
-    monkeypatch.setattr("runspec.finder._caller_directory", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
     return tmp_path
 
 

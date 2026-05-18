@@ -1,5 +1,5 @@
 """
-Tests for loader.py — load_raw for both pyproject.toml and runspec.toml formats.
+Tests for loader.py — load_raw for runspec.toml format.
 """
 
 from pathlib import Path
@@ -11,113 +11,6 @@ from runspec.loader import load_raw
 FIXTURES = Path(__file__).parents[4] / "tests" / "integration" / "fixtures"
 
 
-class TestPyprojectFormat:
-    def test_runnable_under_tool_runspec(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("""
-[tool.runspec.greet]
-description = "Say hello"
-""")
-        result = load_raw(p, "pyproject")
-        assert "greet" in result["runnables"]
-        assert result["runnables"]["greet"]["description"] == "Say hello"
-
-    def test_config_defaults_when_absent(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("[tool.runspec.greet]\ndescription = 'hi'\n")
-        result = load_raw(p, "pyproject")
-        assert result["config"]["autonomy_default"] == "confirm"
-        assert result["config"]["version"] == "1"
-        assert result["config"]["lang"] is None
-
-    def test_config_section_normalised(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("""
-[tool.runspec.config]
-autonomy-default = "autonomous"
-lang = "python"
-version = "2"
-""")
-        result = load_raw(p, "pyproject")
-        cfg = result["config"]
-        assert cfg["autonomy_default"] == "autonomous"
-        assert cfg["lang"] == "python"
-        assert cfg["version"] == "2"
-        assert "config" not in result["runnables"]
-
-    def test_entry_points_from_project_scripts(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("""
-[project.scripts]
-myapp = "myapp.cli:main"
-
-[tool.runspec.greet]
-description = "hi"
-""")
-        result = load_raw(p, "pyproject")
-        assert result["entry_points"] == {"myapp": "myapp.cli:main"}
-
-    def test_entry_points_fallback_to_poetry_scripts(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("""
-[tool.poetry.scripts]
-myapp = "myapp.cli:main"
-
-[tool.runspec.greet]
-description = "hi"
-""")
-        result = load_raw(p, "pyproject")
-        assert result["entry_points"] == {"myapp": "myapp.cli:main"}
-
-    def test_project_scripts_preferred_over_poetry(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("""
-[project.scripts]
-myapp = "myapp.cli:main"
-
-[tool.poetry.scripts]
-myapp = "myapp.poetry:main"
-
-[tool.runspec.greet]
-description = "hi"
-""")
-        result = load_raw(p, "pyproject")
-        assert result["entry_points"]["myapp"] == "myapp.cli:main"
-
-    def test_no_entry_points_when_absent(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("[tool.runspec.greet]\ndescription = 'hi'\n")
-        result = load_raw(p, "pyproject")
-        assert result["entry_points"] == {}
-
-    def test_empty_runspec_section(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("[tool.runspec]\n")
-        result = load_raw(p, "pyproject")
-        assert result["runnables"] == {}
-
-    def test_no_runspec_section(self, tmp_path):
-        p = tmp_path / "pyproject.toml"
-        p.write_text("[project]\nname = 'myapp'\n")
-        result = load_raw(p, "pyproject")
-        assert result["runnables"] == {}
-        assert result["entry_points"] == {}
-
-    def test_non_dict_scalar_excluded_from_runnables(self, tmp_path):
-        # Stray scalars at the top level of [tool.runspec] should be silently ignored.
-        p = tmp_path / "pyproject.toml"
-        p.write_text("""
-[tool.runspec]
-stray_value = "should be ignored"
-
-[tool.runspec.greet]
-description = "hi"
-""")
-        result = load_raw(p, "pyproject")
-        assert "stray_value" not in result["runnables"]
-        assert "greet" in result["runnables"]
-
-
 class TestRunspecFormat:
     def test_top_level_section_becomes_runnable(self, tmp_path):
         p = tmp_path / "runspec.toml"
@@ -125,15 +18,9 @@ class TestRunspecFormat:
 [greet]
 description = "Say hello"
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert "greet" in result["runnables"]
         assert result["runnables"]["greet"]["description"] == "Say hello"
-
-    def test_entry_points_always_empty(self, tmp_path):
-        p = tmp_path / "runspec.toml"
-        p.write_text("[greet]\ndescription = 'hi'\n")
-        result = load_raw(p, "runspec")
-        assert result["entry_points"] == {}
 
     def test_config_section_normalised(self, tmp_path):
         p = tmp_path / "runspec.toml"
@@ -144,15 +31,17 @@ autonomy-default = "supervised"
 [greet]
 description = "hi"
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert result["config"]["autonomy_default"] == "supervised"
         assert "config" not in result["runnables"]
 
     def test_config_defaults_when_absent(self, tmp_path):
         p = tmp_path / "runspec.toml"
         p.write_text("[greet]\ndescription = 'hi'\n")
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert result["config"]["autonomy_default"] == "confirm"
+        assert result["config"]["version"] == "1"
+        assert result["config"]["lang"] is None
 
     def test_multiple_runnables(self, tmp_path):
         p = tmp_path / "runspec.toml"
@@ -163,7 +52,7 @@ description = "Greet"
 [compress]
 description = "Compress"
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert set(result["runnables"].keys()) == {"greet", "compress"}
 
     def test_non_dict_scalar_excluded_from_runnables(self, tmp_path):
@@ -174,7 +63,7 @@ stray_value = "ignored"
 [greet]
 description = "hi"
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert "stray_value" not in result["runnables"]
         assert "greet" in result["runnables"]
 
@@ -183,13 +72,13 @@ class TestScriptNormalisation:
     def test_name_injected_into_script(self, tmp_path):
         p = tmp_path / "runspec.toml"
         p.write_text("[greet]\ndescription = 'hi'\n")
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert result["runnables"]["greet"]["name"] == "greet"
 
     def test_absent_optional_fields_are_none(self, tmp_path):
         p = tmp_path / "runspec.toml"
         p.write_text("[greet]\n")
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         s = result["runnables"]["greet"]
         assert s["description"] is None
         assert s["autonomy"] is None
@@ -204,7 +93,7 @@ class TestScriptNormalisation:
 [greet]
 autonomy-reason = "Writes output files"
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert result["runnables"]["greet"]["autonomy_reason"] == "Writes output files"
 
     def test_subcommand_recursed(self, tmp_path):
@@ -219,7 +108,7 @@ description = "Run it"
 [pipeline.commands.run.args]
 input = {type = "path"}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         commands = result["runnables"]["pipeline"]["commands"]
         assert "run" in commands
         assert commands["run"]["name"] == "run"
@@ -233,7 +122,7 @@ class TestArgNormalisation:
 [greet.args]
 verbose = false
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         arg = result["runnables"]["greet"]["args"]["verbose"]
         assert arg["name"] == "verbose"
         assert arg["default"] is False
@@ -244,7 +133,7 @@ verbose = false
 [greet.args]
 workers = {default = 4, range = [1, 32]}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         arg = result["runnables"]["greet"]["args"]["workers"]
         assert arg["default"] == 4
         assert arg["range"] == (1, 32)
@@ -255,7 +144,7 @@ workers = {default = 4, range = [1, 32]}
 [greet.args]
 timeout = {default = 30, range = [1, 300]}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert isinstance(result["runnables"]["greet"]["args"]["timeout"]["range"], tuple)
 
     def test_absent_fields_default_correctly(self, tmp_path):
@@ -264,7 +153,7 @@ timeout = {default = 30, range = [1, 300]}
 [greet.args]
 name = {type = "str"}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         arg = result["runnables"]["greet"]["args"]["name"]
         assert arg["default"] is None
         assert arg["required"] is None
@@ -283,7 +172,7 @@ name = {type = "str"}
 [greet.args]
 output = {type = "path"}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert result["runnables"]["greet"]["args"]["output"]["name"] == "output"
 
     def test_meta_passed_through(self, tmp_path):
@@ -295,7 +184,7 @@ options = ["web-01", "web-02"]
 web-01 = {datacenter = "us-east"}
 web-02 = {datacenter = "us-west"}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         meta = result["runnables"]["greet"]["args"]["server"]["meta"]
         assert meta["web-01"]["datacenter"] == "us-east"
         assert meta["web-02"]["datacenter"] == "us-west"
@@ -306,7 +195,7 @@ web-02 = {datacenter = "us-west"}
 [greet.args]
 name = {type = "str"}
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         assert result["runnables"]["greet"]["args"]["name"]["meta"] is None
 
 
@@ -318,7 +207,7 @@ class TestGroupNormalisation:
 exclusive = true
 args = ["format", "raw"]
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         group = result["runnables"]["greet"]["groups"]["output-fmt"]
         assert group["name"] == "output-fmt"
         assert group["exclusive"] is True
@@ -333,7 +222,7 @@ at-least-one = true
 exactly-one = false
 args = ["api-key", "token"]
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         group = result["runnables"]["greet"]["groups"]["auth"]
         assert group["at_least_one"] is True
         assert group["exactly_one"] is False
@@ -346,7 +235,7 @@ args = ["api-key"]
 if = "api-key"
 requires = ["endpoint"]
 """)
-        result = load_raw(p, "runspec")
+        result = load_raw(p)
         group = result["runnables"]["greet"]["groups"]["creds"]
         assert group["condition"] == "api-key"
         assert group["requires"] == ["endpoint"]
@@ -356,12 +245,12 @@ class TestErrorHandling:
     def test_missing_file_raises(self, tmp_path):
         p = tmp_path / "nonexistent.toml"
         with pytest.raises(FileNotFoundError):
-            load_raw(p, "runspec")
+            load_raw(p)
 
 
 class TestIntegrationFixtures:
     def test_simple_toml(self):
-        result = load_raw(FIXTURES / "simple.toml", "runspec")
+        result = load_raw(FIXTURES / "simple.toml")
         assert result["config"]["autonomy_default"] == "confirm"
 
         greet = result["runnables"]["greet"]
@@ -374,20 +263,20 @@ class TestIntegrationFixtures:
         assert args["times"]["default"] == 1
 
     def test_complex_toml_config(self):
-        result = load_raw(FIXTURES / "complex.toml", "runspec")
+        result = load_raw(FIXTURES / "complex.toml")
         cfg = result["config"]
         assert cfg["autonomy_default"] == "confirm"
         assert cfg["lang"] == "python"
         assert cfg["version"] == "1"
 
     def test_complex_toml_subcommands(self):
-        result = load_raw(FIXTURES / "complex.toml", "runspec")
+        result = load_raw(FIXTURES / "complex.toml")
         pipeline = result["runnables"]["pipeline"]
         assert "run" in pipeline["commands"]
         assert "validate" in pipeline["commands"]
 
     def test_complex_toml_run_command_args(self):
-        result = load_raw(FIXTURES / "complex.toml", "runspec")
+        result = load_raw(FIXTURES / "complex.toml")
         args = result["runnables"]["pipeline"]["commands"]["run"]["args"]
 
         assert args["input"]["type"] == "path"
@@ -403,13 +292,13 @@ class TestIntegrationFixtures:
         assert args["fields"]["delimiter"] == ","
 
     def test_complex_toml_run_command_metadata(self):
-        result = load_raw(FIXTURES / "complex.toml", "runspec")
+        result = load_raw(FIXTURES / "complex.toml")
         run = result["runnables"]["pipeline"]["commands"]["run"]
         assert run["autonomy"] == "confirm"
         assert run["autonomy_reason"] == "Writes output files and may call external APIs"
 
     def test_complex_toml_groups(self):
-        result = load_raw(FIXTURES / "complex.toml", "runspec")
+        result = load_raw(FIXTURES / "complex.toml")
         groups = result["runnables"]["pipeline"]["commands"]["run"]["groups"]
         assert groups["input-format"]["exclusive"] is True
         assert groups["input-format"]["args"] == ["format", "raw"]
