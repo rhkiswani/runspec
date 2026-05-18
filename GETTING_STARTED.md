@@ -209,9 +209,8 @@ mypy runspec/                   # type check
 
 # runspec CLI (after pip install -e ".[dev]")
 runspec --help
-runspec check
-runspec discover
-runspec emit --format mcp
+runspec local
+runspec local --format mcp
 
 # Git
 git status                      # what's changed

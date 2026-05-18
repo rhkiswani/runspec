@@ -84,7 +84,7 @@ runspec serve --registry https://myserver:8765 --registry-cert ca.pem
 2. It sends a heartbeat every 30 seconds (configurable via `heartbeat` in `runspec.toml`)
 3. The registry purges instances that have missed heartbeats
 4. Clients query `/tools` to see what's available and on which hosts
-5. `runspec run --host <host> --registry <url> <tool>` looks up the tool, gets the execution metadata for that host, and SSHes to run it
+5. `runspec jump <tool> --host <host> --registry <url>` looks up the tool, gets the execution metadata for that host, and SSHes to run it
 
 ## Links
 

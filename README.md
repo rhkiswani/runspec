@@ -62,7 +62,7 @@ def main():
 Make it agent-discoverable:
 
 ```bash
-runspec discover --format mcp
+runspec local --format mcp
 ```
 
 That's it. Your script is now a typed, validated, agent-callable tool.
@@ -78,7 +78,7 @@ That's it. Your script is now a typed, validated, agent-callable tool.
 - **Enforced priority stack** — CLI → env → config → default, automatically
 - **Autonomy control** — declare whether agents can run freely, need confirmation, or must ask
 - **Form rendering** — spec maps directly to MCP chat-native forms
-- **Agent discovery** — `runspec discover` finds all runspec-aware tools in the environment
+- **Agent discovery** — `runspec local` finds all runspec-aware tools in the environment
 - **Language agnostic** — same format for Python, Node, shell, or any language
 
 ## Repository Structure

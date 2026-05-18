@@ -2,6 +2,8 @@
 
 > A language-agnostic, TOML-based interface specification for anything runnable — scripts, applications, and MCP tools — that serves both human developers and AI agents without conversion.
 
+> **Note (v0.7.0):** CLI command names were revised. `discover` → `local`, `run` → `jump`, `check` and `emit` absorbed into `local --format`. References below reflect the original design names and are preserved as historical record.
+
 ---
 
 ## What `runspec` Describes
