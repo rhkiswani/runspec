@@ -47,7 +47,6 @@ export interface ScriptSpec {
 export interface RawSpec {
   config: RawConfig;
   runnables: Record<string, ScriptSpec>;
-  entryPoints: Record<string, string>;
 }
 
 export interface ParsedArgs {

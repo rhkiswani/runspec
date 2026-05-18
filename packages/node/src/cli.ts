@@ -39,21 +39,14 @@ export function main(): void {
 
 function cmdInit(args: string[]): void {
   const nameFlag = getFlag(args, '--name');
-  const fileFlag = getFlag(args, '--file');
+  const langFlag = getFlag(args, '--lang') ?? 'typescript';
 
   const cwd = process.cwd();
   const runnableName = nameFlag ?? sanitizeName(path.basename(cwd));
-
-  const pyproject = path.join(cwd, 'pyproject.toml');
   const runspecToml = path.join(cwd, 'runspec.toml');
 
-  if (fileFlag === 'runspec') {
-    initRunspecToml(runspecToml, runnableName);
-  } else if (fileFlag === 'pyproject' || fs.existsSync(pyproject)) {
-    initPyproject(pyproject, runnableName);
-  } else {
-    initRunspecToml(runspecToml, runnableName);
-  }
+  initRunspecToml(runspecToml, runnableName);
+  initCodeStub(cwd, runnableName, langFlag);
 }
 
 function cmdDiscover(args: string[]): void {
@@ -63,7 +56,7 @@ function cmdDiscover(args: string[]): void {
 
   if (!discovered.length) {
     console.log('No runspec-aware runnables found in this environment.');
-    console.log('Add a [tool.runspec.yourname] section to pyproject.toml or create runspec.toml');
+    console.log("Create a runspec.toml inside your package directory and run 'runspec init' to get started.");
     return;
   }
 
@@ -82,30 +75,20 @@ function cmdDiscover(args: string[]): void {
 
 function cmdCheck(args: string[]): void {
   let configPath: string;
-  let format: 'pyproject' | 'runspec';
 
   try {
-    ({ configPath, format } = findConfig(process.cwd()));
+    ({ configPath } = findConfig(process.cwd()));
   } catch (e) {
     console.log((e as Error).message);
     process.exit(1);
   }
 
-  const raw = loadRaw(configPath, format);
+  const raw = loadRaw(configPath);
   const errors: string[] = [];
   const warnings: string[] = [];
   const ok: string[] = [];
 
   ok.push(`Config found: ${configPath}`);
-
-  if (format === 'pyproject') {
-    const eps = raw.entryPoints;
-    if (Object.keys(eps).length > 0) {
-      ok.push(`[project.scripts] found — ${Object.keys(eps).length} entry point(s)`);
-    } else {
-      warnings.push('No [project.scripts] found — agents may not discover runnables automatically\n  Add entry points to pyproject.toml or use runspec.toml');
-    }
-  }
 
   if ('config' in raw.runnables) {
     errors.push("'config' is a reserved name — rename your runnable to something else");
@@ -144,16 +127,15 @@ function cmdEmit(args: string[]): void {
   const fmt = getFlag(args, '--format') ?? 'mcp';
 
   let configPath: string;
-  let format: 'pyproject' | 'runspec';
 
   try {
-    ({ configPath, format } = findConfig(process.cwd()));
+    ({ configPath } = findConfig(process.cwd()));
   } catch (e) {
     console.log((e as Error).message);
     process.exit(1);
   }
 
-  const raw = loadRaw(configPath, format);
+  const raw = loadRaw(configPath);
   const config = raw.config;
 
   let runnables = raw.runnables;
@@ -233,8 +215,8 @@ function argToJsonSchema(arg: ArgSpec): Record<string, unknown> {
 
 function discoverLocal(): Array<{ source: string; runnable: string; spec: ScriptSpec }> {
   try {
-    const { configPath, format } = findConfig(process.cwd());
-    const raw = loadRaw(configPath, format);
+    const { configPath } = findConfig(process.cwd());
+    const raw = loadRaw(configPath);
     return Object.entries(raw.runnables).map(([name, spec]) => ({ source: configPath, runnable: name, spec }));
   } catch {
     return [];
@@ -268,55 +250,53 @@ function sanitizeName(raw: string): string {
   return s || 'myscript';
 }
 
-function initPyproject(filePath: string, name: string): void {
-  if (fs.existsSync(filePath)) {
-    const original = fs.readFileSync(filePath, 'utf-8');
-    let data: Record<string, unknown>;
-    try {
-      const { parse } = require('smol-toml') as { parse: (s: string) => unknown };
-      data = parse(original) as Record<string, unknown>;
-    } catch (e) {
-      console.log(`✗  Could not read ${path.basename(filePath)}: ${(e as Error).message}`);
-      process.exit(1);
-    }
-
-    if ('runspec' in ((data as any)?.tool ?? {})) {
-      const existing = Object.keys((data as any).tool.runspec).filter(
-        (k) => k !== 'config' && typeof (data as any).tool.runspec[k] === 'object',
-      );
-      console.log(`✗  ${path.basename(filePath)} already has [tool.runspec] — already initialized`);
-      if (existing.length) console.log(`   Existing runnables: ${existing.join(', ')}`);
-      process.exit(1);
-    }
-
-    const content = original.trimEnd() + '\n\n' + pyprojectBlock(name);
-    writeAndVerify(filePath, content, original);
-    console.log(`  ✓  Updated ${path.basename(filePath)} with [${name}] runnable`);
-  } else {
-    const content = pyprojectBlock(name);
-    writeAndVerify(filePath, content, null);
-    console.log(`  ✓  Created ${path.basename(filePath)} with [${name}] runnable`);
-  }
-  console.log("     Run 'runspec check' to validate.");
-}
-
 function initRunspecToml(filePath: string, name: string): void {
   if (fs.existsSync(filePath)) {
     console.log(`✗  ${path.basename(filePath)} already exists — already initialized`);
     console.log(`   Edit ${path.basename(filePath)} directly to add more runnables.`);
     process.exit(1);
   }
-  writeAndVerify(filePath, runspecTomlBlock(name), null);
-  console.log(`  ✓  Created ${path.basename(filePath)} with [${name}] runnable`);
+  const content = `[${name}]\ndescription = "Describe what ${name} does"\nautonomy    = "confirm"\n\n[${name}.args]\n# example = {type = "str", description = "An example argument"}\n`;
+  writeAndVerify(filePath, content, null);
+  console.log(`  ✓  Created runspec.toml with [${name}] runnable`);
+}
+
+function initCodeStub(dir: string, name: string, lang: string): void {
+  const templates: Record<string, { ext: string; content: (n: string) => string }> = {
+    typescript: {
+      ext: '.ts',
+      content: (n) =>
+        `import { parse } from 'runspec';\n\nfunction main(): void {\n  const args = parse();\n  // your logic here\n}\n\nmain();\n`,
+    },
+    javascript: {
+      ext: '.js',
+      content: (n) =>
+        `const { parse } = require('runspec');\n\nfunction main() {\n  const args = parse();\n  // your logic here\n}\n\nmain();\n`,
+    },
+    python: {
+      ext: '.py',
+      content: (n) =>
+        `from runspec import parse\n\n\ndef main():\n    args = parse()\n    # your logic here\n\n\nif __name__ == "__main__":\n    main()\n`,
+    },
+  };
+
+  const template = templates[lang];
+  if (!template) {
+    console.log(`✗  Unknown --lang: ${lang}`);
+    console.log(`   Supported: typescript, javascript, python`);
+    process.exit(1);
+  }
+
+  const filePath = path.join(dir, name + template.ext);
+  if (fs.existsSync(filePath)) {
+    console.log(`  ℹ  ${path.basename(filePath)} already exists — skipped`);
+  } else {
+    fs.writeFileSync(filePath, template.content(name), 'utf-8');
+    console.log(`  ✓  Created ${path.basename(filePath)}`);
+  }
+
+  console.log("     Move both files inside your package directory before publishing.");
   console.log("     Run 'runspec check' to validate.");
-}
-
-function pyprojectBlock(name: string): string {
-  return `[tool.runspec.${name}]\ndescription = "Describe what ${name} does"\nautonomy    = "confirm"\n\n[tool.runspec.${name}.args]\n# example = {type = "str", description = "An example argument"}\n`;
-}
-
-function runspecTomlBlock(name: string): string {
-  return `[${name}]\ndescription = "Describe what ${name} does"\nautonomy    = "confirm"\n\n[${name}.args]\n# example = {type = "str", description = "An example argument"}\n`;
 }
 
 function writeAndVerify(filePath: string, content: string, original: string | null): void {
@@ -350,7 +330,7 @@ Usage:
   runspec <command> [options]
 
 Commands:
-  init        Create or update pyproject.toml or runspec.toml with a scaffold
+  init        Create runspec.toml and a code stub
   discover    Find all runspec-aware runnables in this environment
   check       Validate this project's runspec setup
   emit        Emit tool schemas for agent frameworks
@@ -358,7 +338,7 @@ Commands:
 
 Options for init:
   --name      Runnable name (default: current directory name)
-  --file      Target file: pyproject or runspec (auto-detected if omitted)
+  --lang      Language for code stub: typescript (default), javascript, python
 
 Options for discover:
   --format    Output format: text (default), json, mcp, openai, anthropic
@@ -370,6 +350,7 @@ Options for emit:
 Examples:
   runspec init
   runspec init --name myapp
+  runspec init --name myapp --lang javascript
   runspec discover
   runspec discover --format mcp
   runspec check

@@ -84,3 +84,73 @@ def test_runspec_toml_is_valid(tmp_path, monkeypatch):
 
     raw = load_raw(tmp_path / "runspec.toml")
     assert "myscript" in raw["runnables"]
+
+
+# ── codegen — default Python stub ────────────────────────────────────────────
+
+
+def test_creates_python_stub_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "greet"])
+
+    stub = tmp_path / "greet.py"
+    assert stub.exists()
+    content = stub.read_text()
+    assert "from runspec import parse" in content
+    assert "def main():" in content
+    assert 'if __name__ == "__main__"' in content
+
+
+def test_python_stub_is_executable_as_script(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "greet"])
+    # compile-check: no syntax errors
+    import ast
+    ast.parse((tmp_path / "greet.py").read_text())
+
+
+# ── codegen — --lang overrides ────────────────────────────────────────────────
+
+
+def test_lang_typescript_generates_ts(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "greet", "--lang", "typescript"])
+
+    stub = tmp_path / "greet.ts"
+    assert stub.exists()
+    content = stub.read_text()
+    assert "import { parse } from 'runspec'" in content
+    assert "function main()" in content
+    assert "main();" in content
+
+
+def test_lang_javascript_generates_js(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "greet", "--lang", "javascript"])
+
+    stub = tmp_path / "greet.js"
+    assert stub.exists()
+    content = stub.read_text()
+    assert "require('runspec')" in content
+    assert "main();" in content
+
+
+def test_unknown_lang_exits(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        cmd_init(["--name", "greet", "--lang", "ruby"])
+    assert exc.value.code == 1
+
+
+# ── codegen — no-overwrite behaviour ─────────────────────────────────────────
+
+
+def test_does_not_overwrite_existing_stub(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    existing = tmp_path / "greet.py"
+    existing.write_text("# existing\n", encoding="utf-8")
+
+    cmd_init(["--name", "greet"])
+
+    assert existing.read_text() == "# existing\n"
+    assert "already exists" in capsys.readouterr().out

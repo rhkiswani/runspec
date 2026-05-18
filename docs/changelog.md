@@ -4,6 +4,31 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.6.0 — 2026-05-18
+
+### Changed
+
+**`runspec init` now generates a code stub alongside `runspec.toml`.** Running
+`runspec init --name greet` creates both `runspec.toml` and `greet.py` (Python CLI)
+or `greet.ts` (Node CLI) with `parse()` already wired up. A `--lang` flag lets you
+override the language from either CLI:
+
+```bash
+runspec init --name greet                      # .py from Python CLI, .ts from Node CLI
+runspec init --name greet --lang typescript    # .ts from either CLI
+runspec init --name greet --lang javascript    # .js from either CLI
+runspec init --name greet --lang python        # .py from either CLI
+```
+
+If the stub file already exists it is skipped — `runspec.toml` still fails fast if it
+already exists.
+
+**Node: pyproject.toml support removed.** The Node package no longer reads
+`[tool.runspec.*]` from `pyproject.toml`. `runspec.toml` inside the package directory
+is the only supported format, matching Python since 0.5.0.
+
+---
+
 ## 0.5.0 — 2026-05-18
 
 ### Added

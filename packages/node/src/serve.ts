@@ -16,16 +16,15 @@ const SHELL_EXTS = ['', '.sh', '.ksh', '.bash', '.zsh'];
 
 export function serve(): void {
   let configPath: string;
-  let format: 'pyproject' | 'runspec';
 
   try {
-    ({ configPath, format } = findConfig(process.cwd()));
+    ({ configPath } = findConfig(process.cwd()));
   } catch (e) {
     process.stderr.write(`runspec serve: ${(e as Error).message}\n`);
     process.exit(1);
   }
 
-  const raw = loadRaw(configPath, format);
+  const raw = loadRaw(configPath);
   const config = raw.config;
 
   const tools: Record<string, Record<string, unknown>> = {};
@@ -93,7 +92,7 @@ function dispatch(
 }
 
 function handleInitialize(reqId: unknown, serverName: string): Record<string, unknown> {
-  const version = '0.3.0';
+  const version = '0.6.0';
   return {
     jsonrpc: '2.0',
     id: reqId,

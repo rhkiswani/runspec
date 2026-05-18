@@ -25,7 +25,7 @@ autonomy = "autonomous"
 name = {type = "str"}
 loud = {default = false}
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect(raw.runnables['greet']).toBeDefined();
   expect(raw.runnables['greet'].description).toBe('Greet someone');
   expect(raw.runnables['greet'].args['name'].type).toBe('str');
@@ -39,7 +39,7 @@ test('normalises hyphenated field names', () => {
 [deploy]
 autonomy-reason = "Irreversible"
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect(raw.runnables['deploy'].autonomyReason).toBe('Irreversible');
 });
 
@@ -54,7 +54,7 @@ version = "1"
 [greet]
 description = "hi"
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect(raw.config.autonomyDefault).toBe('autonomous');
   expect(raw.config.version).toBe('1');
 });
@@ -69,44 +69,9 @@ autonomy-default = "confirm"
 [greet]
 description = "hi"
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect('config' in raw.runnables).toBe(false);
   expect('greet' in raw.runnables).toBe(true);
-});
-
-// ── pyproject.toml format ─────────────────────────────────────────────────────
-
-test('loads pyproject.toml format', () => {
-  const dir = tmpDir();
-  const file = path.join(dir, 'pyproject.toml');
-  fs.writeFileSync(file, `
-[project]
-name = "myproject"
-
-[tool.runspec.greet]
-description = "Greet"
-autonomy = "confirm"
-
-[tool.runspec.greet.args]
-name = {type = "str"}
-`);
-  const raw = loadRaw(file, 'pyproject');
-  expect(raw.runnables['greet']).toBeDefined();
-  expect(raw.runnables['greet'].args['name'].type).toBe('str');
-});
-
-test('reads entry points from pyproject.toml', () => {
-  const dir = tmpDir();
-  const file = path.join(dir, 'pyproject.toml');
-  fs.writeFileSync(file, `
-[project.scripts]
-greet = "myapp.greet:main"
-
-[tool.runspec.greet]
-description = "Greet"
-`);
-  const raw = loadRaw(file, 'pyproject');
-  expect(raw.entryPoints['greet']).toBe('myapp.greet:main');
 });
 
 // ── arg normalisation ─────────────────────────────────────────────────────────
@@ -122,7 +87,7 @@ description = "hi"
 loud = false
 times = 1
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect(raw.runnables['greet'].args['loud'].default).toBe(false);
   expect(raw.runnables['greet'].args['times'].default).toBe(1);
 });
@@ -137,7 +102,7 @@ description = "hi"
 [greet.args]
 workers = {default = 4, range = [1, 32]}
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect(raw.runnables['greet'].args['workers'].range).toEqual([1, 32]);
 });
 
@@ -152,7 +117,7 @@ description = "hi"
 exclusive = true
 args = ["json", "csv"]
 `);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   const group = raw.runnables['pipeline'].groups['formats'];
   expect(group.exclusive).toBe(true);
   expect(group.args).toEqual(['json', 'csv']);
@@ -164,6 +129,6 @@ test('autonomy-default falls back to confirm', () => {
   const dir = tmpDir();
   const file = path.join(dir, 'runspec.toml');
   fs.writeFileSync(file, `[greet]\ndescription = "hi"\n`);
-  const raw = loadRaw(file, 'runspec');
+  const raw = loadRaw(file);
   expect(raw.config.autonomyDefault).toBe('confirm');
 });

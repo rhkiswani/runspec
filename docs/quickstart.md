@@ -3,6 +3,7 @@
 !!! note "Python guide"
     This guide uses Python. For Node.js and TypeScript, see the [Node Library](node.md)
     reference — the TOML format is identical, only the library call differs.
+    `runspec init --name greet --lang typescript` generates a `.ts` starter instead.
 
 Get from zero to a working runnable in five steps.
 
@@ -19,7 +20,9 @@ pip install runspec
 ## 2. Create your config
 
 !!! tip "New project?"
-    Run `runspec init --name greet` to scaffold the config automatically, then fill in the details and continue from step 3.
+    Run `runspec init --name greet` to scaffold both files automatically — it creates
+    `runspec.toml` and a `greet.py` starter with `parse()` already wired up.
+    Fill in your logic and continue from step 3.
 
 Create `hello/runspec.toml` inside your package directory:
 
@@ -41,10 +44,26 @@ setup step differs per language.
 
 ## 3. Write your runnable
 
-Create `hello/greet.py`:
+`runspec init` already created `hello/greet.py` with this starter:
 
 ```python
 from runspec import parse
+
+
+def main():
+    args = parse()
+    # your logic here
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Fill in your logic:
+
+```python
+from runspec import parse
+
 
 def main():
     args = parse()
@@ -53,6 +72,23 @@ def main():
         message = message.upper()
     for _ in range(args.times):
         print(message)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+For TypeScript, `runspec init --name greet --lang typescript` generates `greet.ts` instead:
+
+```typescript
+import { parse } from 'runspec';
+
+function main(): void {
+  const args = parse();
+  // your logic here
+}
+
+main();
 ```
 
 `parse()` finds your config automatically — no path required. It walks up

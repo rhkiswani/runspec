@@ -2,19 +2,9 @@ import * as fs from 'fs';
 import { parse as parseTOML } from 'smol-toml';
 import type { RawConfig, RawSpec, ScriptSpec, ArgSpec, GroupSpec } from './models';
 
-export function loadRaw(configPath: string, format: 'pyproject' | 'runspec'): RawSpec {
+export function loadRaw(configPath: string): RawSpec {
   const content = fs.readFileSync(configPath, 'utf-8');
-  const data = parseTOML(content) as Record<string, unknown>;
-
-  let raw: Record<string, unknown>;
-  let entryPoints: Record<string, string> = {};
-
-  if (format === 'pyproject') {
-    raw = ((data as any)?.tool?.runspec ?? {}) as Record<string, unknown>;
-    entryPoints = readEntryPoints(data);
-  } else {
-    raw = data;
-  }
+  const raw = parseTOML(content) as Record<string, unknown>;
 
   const runnablesRaw: Record<string, Record<string, unknown>> = {};
   for (const [key, value] of Object.entries(raw)) {
@@ -26,7 +16,6 @@ export function loadRaw(configPath: string, format: 'pyproject' | 'runspec'): Ra
   return {
     config: normaliseConfig((raw['config'] ?? {}) as Record<string, unknown>),
     runnables: normaliseRunnables(runnablesRaw),
-    entryPoints,
   };
 }
 
@@ -111,10 +100,3 @@ function normaliseCommands(raw: Record<string, Record<string, unknown>>): Record
   return Object.fromEntries(Object.entries(raw).map(([name, data]) => [name, normaliseScript(name, data)]));
 }
 
-function readEntryPoints(data: Record<string, unknown>): Record<string, string> {
-  const projectScripts = (data as any)?.project?.scripts;
-  if (projectScripts && typeof projectScripts === 'object') return projectScripts as Record<string, string>;
-  const poetryScripts = (data as any)?.tool?.poetry?.scripts;
-  if (poetryScripts && typeof poetryScripts === 'object') return poetryScripts as Record<string, string>;
-  return {};
-}

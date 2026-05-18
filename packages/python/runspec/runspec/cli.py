@@ -237,14 +237,16 @@ def cmd_run(args: list[str]) -> None:
 
 
 def cmd_init(args: list[str]) -> None:
-    """Create runspec.toml with a runspec scaffold."""
+    """Create runspec.toml and a code stub."""
     name_flag = _get_flag(args, "--name")
+    lang_flag = _get_flag(args, "--lang") or "python"
 
     cwd = Path.cwd()
     runnable_name = name_flag or _sanitize_name(cwd.name)
     runspec_toml = cwd / "runspec.toml"
 
     _init_runspec_toml(runspec_toml, runnable_name)
+    _init_code_stub(cwd, runnable_name, lang_flag)
 
 
 def _sanitize_name(raw: str) -> str:
@@ -257,22 +259,49 @@ def _sanitize_name(raw: str) -> str:
 
 
 def _init_runspec_toml(path: Path, name: str) -> None:
-    """Create runspec.toml with a runspec scaffold."""
     if path.exists():
         print(f"✗  {path.name} already exists — already initialized")
         print(f"   Edit {path.name} directly to add more runnables.")
         sys.exit(1)
 
-    content = _runspec_toml_block(name)
+    content = f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n'
     _write_and_verify(path, content, None)
-    print(f"  ✓  Created {path.name} with [{name}] runnable")
-    print("     Move it inside your package directory (e.g. mypkg/runspec.toml) before publishing.")
+    print(f"  ✓  Created runspec.toml with [{name}] runnable")
+
+
+_CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
+    "python": (
+        ".py",
+        "from runspec import parse\n\n\ndef main():\n    args = parse()\n    # your logic here\n\n\nif __name__ == \"__main__\":\n    main()\n",
+    ),
+    "typescript": (
+        ".ts",
+        "import { parse } from 'runspec';\n\nfunction main(): void {\n  const args = parse();\n  // your logic here\n}\n\nmain();\n",
+    ),
+    "javascript": (
+        ".js",
+        "const { parse } = require('runspec');\n\nfunction main() {\n  const args = parse();\n  // your logic here\n}\n\nmain();\n",
+    ),
+}
+
+
+def _init_code_stub(directory: Path, name: str, lang: str) -> None:
+    if lang not in _CODE_STUB_TEMPLATES:
+        print(f"✗  Unknown --lang: {lang}")
+        print("   Supported: python, typescript, javascript")
+        sys.exit(1)
+
+    ext, content = _CODE_STUB_TEMPLATES[lang]
+    stub_path = directory / (name + ext)
+
+    if stub_path.exists():
+        print(f"  ℹ  {stub_path.name} already exists — skipped")
+    else:
+        stub_path.write_text(content, encoding="utf-8")
+        print(f"  ✓  Created {stub_path.name}")
+
+    print("     Move both files inside your package directory before publishing.")
     print("     Run 'runspec check' to validate.")
-
-
-
-def _runspec_toml_block(name: str) -> str:
-    return f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n'
 
 
 def _write_and_verify(path: Path, content: str, original: str | None) -> None:
@@ -623,6 +652,7 @@ Options for serve:
 
 Options for init:
   --name      Runnable name (default: current directory name)
+  --lang      Language for code stub: python (default), typescript, javascript
 
 Options for discover:
   --format    Output format: text (default), json, mcp, openai, anthropic
@@ -639,6 +669,7 @@ Examples:
   runspec run deploy --host server-01            # run remotely via SSH
   runspec run deploy --host server-01 -- --env prod
   runspec init
+  runspec init --name myapp --lang typescript
   runspec check
   runspec serve --registry http://registry:8080
   runspec serve --dev

@@ -11,26 +11,26 @@ const COMPLEX = path.join(FIXTURES, 'complex.toml');
 
 describe('simple.toml', () => {
   test('loads config section', () => {
-    const raw = loadRaw(SIMPLE, 'runspec');
+    const raw = loadRaw(SIMPLE);
     expect(raw.config.autonomyDefault).toBe('confirm');
   });
 
   test('greet runnable present', () => {
-    const raw = loadRaw(SIMPLE, 'runspec');
+    const raw = loadRaw(SIMPLE);
     expect(raw.runnables['greet']).toBeDefined();
     expect(raw.runnables['greet'].description).toBe('Greet someone from the command line');
     expect(raw.runnables['greet'].autonomy).toBe('autonomous');
   });
 
   test('greet args: name is str and required', () => {
-    const raw = loadRaw(SIMPLE, 'runspec');
+    const raw = loadRaw(SIMPLE);
     const inferred = inferScript(raw.runnables['greet'], raw.config.autonomyDefault);
     expect(inferred.args['name'].type).toBe('str');
     expect(inferred.args['name'].required).toBe(true);
   });
 
   test('greet args: loud inferred as flag', () => {
-    const raw = loadRaw(SIMPLE, 'runspec');
+    const raw = loadRaw(SIMPLE);
     const inferred = inferScript(raw.runnables['greet'], raw.config.autonomyDefault);
     expect(inferred.args['loud'].type).toBe('flag');
     expect(inferred.args['loud'].required).toBe(false);
@@ -38,7 +38,7 @@ describe('simple.toml', () => {
   });
 
   test('greet args: times inferred as int', () => {
-    const raw = loadRaw(SIMPLE, 'runspec');
+    const raw = loadRaw(SIMPLE);
     const inferred = inferScript(raw.runnables['greet'], raw.config.autonomyDefault);
     expect(inferred.args['times'].type).toBe('int');
     expect(inferred.args['times'].default).toBe(1);
@@ -49,27 +49,27 @@ describe('simple.toml', () => {
 
 describe('complex.toml', () => {
   test('loads config section', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     expect(raw.config.autonomyDefault).toBe('confirm');
     expect(raw.config.lang).toBe('python');
     expect(raw.config.version).toBe('1');
   });
 
   test('pipeline runnable present', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     expect(raw.runnables['pipeline']).toBeDefined();
     expect(raw.runnables['pipeline'].description).toBe('Process and validate data pipeline files');
   });
 
   test('pipeline has run and validate subcommands', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const cmds = raw.runnables['pipeline'].commands;
     expect(cmds['run']).toBeDefined();
     expect(cmds['validate']).toBeDefined();
   });
 
   test('run subcommand: input is path and required', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['input'].type).toBe('path');
@@ -77,7 +77,7 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: format is choice with default', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['format'].type).toBe('choice');
@@ -87,7 +87,7 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: workers inferred as int with range', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['workers'].type).toBe('int');
@@ -96,7 +96,7 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: dry-run inferred as flag', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['dry-run'].type).toBe('flag');
@@ -104,7 +104,7 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: tag is multiple', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['tag'].multiple).toBe(true);
@@ -112,7 +112,7 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: fields has delimiter', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['fields'].delimiter).toBe(',');
@@ -120,7 +120,7 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: api-key has env and autonomy', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['api-key'].env).toBe('PIPELINE_API_KEY');
@@ -128,21 +128,21 @@ describe('complex.toml', () => {
   });
 
   test('run subcommand: verbose has short flag', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['verbose'].short).toBe('-v');
   });
 
   test('run subcommand: threads has deprecated field', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.args['threads'].deprecated).toBe('use --workers instead');
   });
 
   test('run subcommand: groups defined', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.groups['input-format']).toBeDefined();
@@ -152,21 +152,21 @@ describe('complex.toml', () => {
   });
 
   test('validate subcommand: is autonomous', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const validate = inferred.commands['validate'];
     expect(validate.autonomy).toBe('autonomous');
   });
 
   test('validate subcommand: format is choice', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const validate = inferred.commands['validate'];
     expect(validate.args['format'].type).toBe('choice');
   });
 
   test('run subcommand: autonomy-reason preserved', () => {
-    const raw = loadRaw(COMPLEX, 'runspec');
+    const raw = loadRaw(COMPLEX);
     const inferred = inferScript(raw.runnables['pipeline'], raw.config.autonomyDefault);
     const run = inferred.commands['run'];
     expect(run.autonomyReason).toBe('Writes output files and may call external APIs');

@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { findConfig, findScriptName } from './finder';
+import { findConfig } from './finder';
 import { loadRaw } from './loader';
 import { inferScript, effectiveAutonomy } from './inference';
 import { coerce } from './types';
@@ -16,11 +16,11 @@ export interface ParseOptions {
 export function parse(opts: ParseOptions = {}): ParsedArgs {
   const { scriptName, argv: argvOverride, cwd } = opts;
 
-  const { configPath, format } = findConfig(cwd);
-  const raw = loadRaw(configPath, format);
+  const { configPath } = findConfig(cwd);
+  const raw = loadRaw(configPath);
   const config = raw.config;
 
-  const name = scriptName ?? findScriptName(configPath, format) ?? inferFromArgv();
+  const name = scriptName ?? inferFromArgv();
   if (!name) throw new RunSpecError('✗  Could not determine runnable name. Pass scriptName option.');
   if (name === 'config') throw new RunSpecError("✗  'config' is a reserved name in runspec.\n   Rename your runnable.");
 

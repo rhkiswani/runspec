@@ -13,18 +13,19 @@ runspec <command> [options]
 
 ## runspec init
 
-Scaffold a new `runspec.toml` in the current directory with a starter runnable ready to fill in.
+Scaffold a new `runspec.toml` and a language-appropriate code stub in the current directory.
 
 ```bash
-runspec init [--name <name>]
+runspec init [--name <name>] [--lang <lang>]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `--name` | current directory name | Name for the initial runnable |
+| `--lang` | `python` (Python CLI) / `typescript` (Node CLI) | Language for the code stub: `python`, `typescript`, `javascript` |
 
-If `runspec.toml` already exists, `init` exits with an error and lists the existing
-runnables — it will not overwrite or merge.
+If `runspec.toml` already exists, `init` exits with an error — it will not overwrite or merge.
+If the code stub already exists, it is skipped with an info message.
 
 ### Example
 
@@ -43,10 +44,44 @@ autonomy    = "confirm"
 # example = {type = "str", description = "An example argument"}
 ```
 
-Move the file inside your package directory (e.g. `mypkg/runspec.toml`) before
-publishing so it is included as package data automatically.
+Also creates `deploy.py` (Python CLI default):
 
-Then fill in the description, declare your args, and run `runspec check` to validate.
+```python
+from runspec import parse
+
+
+def main():
+    args = parse()
+    # your logic here
+
+
+if __name__ == "__main__":
+    main()
+```
+
+For a TypeScript stub instead:
+
+```bash
+runspec init --name deploy --lang typescript
+```
+
+Creates `deploy.ts`:
+
+```typescript
+import { parse } from 'runspec';
+
+function main(): void {
+  const args = parse();
+  // your logic here
+}
+
+main();
+```
+
+Move both files inside your package directory (e.g. `mypkg/`) before
+publishing so they are included as package data automatically.
+
+Then fill in the description, declare your args, add your logic, and run `runspec check` to validate.
 
 ---
 
