@@ -12,6 +12,8 @@ const ERR_PARSE = -32700;
 const ERR_METHOD_NOT_FOUND = -32601;
 const ERR_INVALID_PARAMS = -32602;
 
+const SHELL_EXTS = ['', '.sh', '.ksh', '.bash', '.zsh'];
+
 export function serve(): void {
   let configPath: string;
   let format: 'pyproject' | 'runspec';
@@ -28,23 +30,26 @@ export function serve(): void {
 
   const tools: Record<string, Record<string, unknown>> = {};
   const argSpecs: Record<string, Record<string, unknown>> = {};
+  const execSpecs: Record<string, { command: string | null }> = {};
+
+  const binDir = path.join(path.dirname(configPath), 'node_modules', '.bin');
 
   for (const [name, runnable] of Object.entries(raw.runnables)) {
     const inferred = inferScript(runnable, config.autonomyDefault);
     tools[name] = buildSchema(name, inferred, 'mcp');
     argSpecs[name] = inferred.args ?? {};
+    execSpecs[name] = { command: findScript(name, binDir) };
   }
 
   const serverName = serverNameFromConfig(config as unknown as Record<string, unknown>);
-  const binDir = path.join(path.dirname(configPath), 'node_modules', '.bin');
 
-  mcpLoop(tools, argSpecs, binDir, serverName);
+  mcpLoop(tools, argSpecs, execSpecs, serverName);
 }
 
 function mcpLoop(
   tools: Record<string, Record<string, unknown>>,
   argSpecs: Record<string, Record<string, unknown>>,
-  binDir: string,
+  execSpecs: Record<string, { command: string | null }>,
   serverName: string,
 ): void {
   const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -61,7 +66,7 @@ function mcpLoop(
       return;
     }
 
-    const response = dispatch(request, tools, argSpecs, binDir, serverName);
+    const response = dispatch(request, tools, argSpecs, execSpecs, serverName);
     if (response !== null) writeMsg(response);
   });
 }
@@ -70,7 +75,7 @@ function dispatch(
   request: Record<string, unknown>,
   tools: Record<string, Record<string, unknown>>,
   argSpecs: Record<string, Record<string, unknown>>,
-  binDir: string,
+  execSpecs: Record<string, { command: string | null }>,
   serverName: string,
 ): Record<string, unknown> | null {
   const method = (request['method'] as string) ?? '';
@@ -81,14 +86,14 @@ function dispatch(
   if (method === 'initialize') return handleInitialize(reqId, serverName);
   if (method === 'tools/list') return handleToolsList(reqId, tools);
   if (method === 'tools/call') {
-    return handleToolsCall(reqId, (request['params'] ?? {}) as Record<string, unknown>, tools, argSpecs, binDir);
+    return handleToolsCall(reqId, (request['params'] ?? {}) as Record<string, unknown>, tools, argSpecs, execSpecs);
   }
 
   return { jsonrpc: '2.0', id: reqId, error: { code: ERR_METHOD_NOT_FOUND, message: `Method not found: ${method}` } };
 }
 
 function handleInitialize(reqId: unknown, serverName: string): Record<string, unknown> {
-  const version = '0.3.0';
+  const version = '0.4.0';
   return {
     jsonrpc: '2.0',
     id: reqId,
@@ -109,7 +114,7 @@ function handleToolsCall(
   params: Record<string, unknown>,
   tools: Record<string, Record<string, unknown>>,
   argSpecs: Record<string, Record<string, unknown>>,
-  binDir: string,
+  execSpecs: Record<string, { command: string | null }>,
 ): Record<string, unknown> {
   const name = (params['name'] as string) ?? '';
   const args = (params['arguments'] as Record<string, unknown>) ?? {};
@@ -118,20 +123,22 @@ function handleToolsCall(
     return { jsonrpc: '2.0', id: reqId, error: { code: ERR_INVALID_PARAMS, message: `Unknown tool: ${name}` } };
   }
 
-  const cmd = findScript(name, binDir);
+  const cmd = execSpecs[name]?.command ?? null;
   if (!cmd) {
     return {
       jsonrpc: '2.0',
       id: reqId,
       result: {
-        content: [{ type: 'text', text: `Script not found in ${binDir}: ${name}` }],
+        content: [{ type: 'text', text: `Script '${name}' not found. Place it alongside runspec.toml or in a bin/ subdirectory.` }],
         isError: true,
       },
     };
   }
 
-  const argv = argsToArgv(args, argSpecs[name] ?? {});
-  const env = { ...process.env, RUNSPEC_AGENT: '1' };
+  const toolArgSpecs = argSpecs[name] ?? {};
+  const argv = argsToArgv(args, toolArgSpecs);
+  const runspecEnv = argsToRunspecEnv(args, toolArgSpecs);
+  const env = { ...process.env, RUNSPEC_AGENT: '1', ...runspecEnv };
 
   const result = spawnSync(cmd, argv, { encoding: 'utf-8', env });
 
@@ -159,7 +166,7 @@ function argsToArgv(args: Record<string, unknown>, argSpecs: Record<string, unkn
 
   for (const [argName, spec] of Object.entries(argSpecs)) {
     const s = spec as Record<string, unknown>;
-    let value = args[argName] ?? args[argName.replace(/-/g, '_')];
+    const value = args[argName] ?? args[argName.replace(/-/g, '_')];
     if (value === null || value === undefined) continue;
 
     const flag = `--${argName}`;
@@ -177,11 +184,46 @@ function argsToArgv(args: Record<string, unknown>, argSpecs: Record<string, unkn
   return argv;
 }
 
+function argsToRunspecEnv(args: Record<string, unknown>, argSpecs: Record<string, unknown>): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  for (const [argName, spec] of Object.entries(argSpecs)) {
+    const s = spec as Record<string, unknown>;
+    let value = args[argName] ?? args[argName.replace(/-/g, '_')];
+    if (value === null || value === undefined) value = s['default'];
+    if (value === null || value === undefined) continue;
+
+    const envKey = 'RUNSPEC_' + argName.toUpperCase().replace(/-/g, '_').replace(/\./g, '_');
+    const argType = (s['type'] as string) ?? 'str';
+
+    if (argType === 'flag' || argType === 'bool') {
+      env[envKey] = value ? '1' : '0';
+    } else if (s['multiple'] && Array.isArray(value)) {
+      env[envKey] = (value as unknown[]).map(String).join('\n');
+    } else {
+      env[envKey] = String(value);
+    }
+  }
+
+  return env;
+}
+
 function findScript(name: string, binDir: string): string | null {
-  const candidate = path.join(binDir, name);
-  if (fs.existsSync(candidate)) return candidate;
-  const candidateExe = path.join(binDir, name + '.exe');
-  if (fs.existsSync(candidateExe)) return candidateExe;
+  // 1. node_modules/.bin (Node entry points; also .exe on Windows)
+  for (const ext of [...SHELL_EXTS, '.exe']) {
+    const candidate = path.join(binDir, name + ext);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  // 2. cwd/ and cwd/bin/
+  const cwd = process.cwd();
+  for (const dir of [cwd, path.join(cwd, 'bin')]) {
+    for (const ext of SHELL_EXTS) {
+      const candidate = path.join(dir, name + ext);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+
   return null;
 }
 
