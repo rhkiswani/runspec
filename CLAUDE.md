@@ -37,7 +37,20 @@ runspec/
         test_types.py
         test_validator.py
       pyproject.toml
-    node/                          ← stub, not yet implemented
+    node/                          ← active, published to npm as runspec-node
+      src/
+        cli.ts                     ← init, discover, check, emit, serve commands
+        finder.ts                  ← locates runspec.toml
+        loader.ts                  ← reads TOML, normalises to internal dict
+        inference.ts               ← applies inference rules
+        types.ts                   ← type registry + coercers
+        validator.ts               ← two-pass validation
+        parser.ts                  ← orchestrates pipeline, returns ParsedArgs
+        serve.ts                   ← MCP stdio server
+        models.ts                  ← TypeScript interfaces
+        errors.ts                  ← typed error classes
+      tests/
+      bin/runspec.js               ← CLI entry point
     go/                            ← stub, not yet implemented
   tests/
     integration/
@@ -47,7 +60,9 @@ runspec/
   .github/
     workflows/
       python.yml                   ← CI for Python (active)
-      node.yml                     ← stub
+      node.yml                     ← CI for Node (active)
+      release.yml                  ← Python PyPI release + GitHub Release on v* tag
+      node-release.yml             ← Node npm release + GitHub Release on node-v* tag
       go.yml                       ← stub
       integration.yml              ← compliance suite
 ```
@@ -147,12 +162,43 @@ mypy runspec/
 
 ---
 
+## Node Specifics
+
+```bash
+# Requirements
+Node 18+, TypeScript
+
+# Environment setup
+cd packages/node
+npm install
+
+# Run tests
+npm test
+
+# Build
+npm run build
+
+# Type check
+npm run typecheck
+```
+
+Node mirrors the Python public API: `parse()`, `loadSpec()`, `registerType()`.
+CLI commands: `init`, `discover`, `check`, `emit`, `serve`.
+`run` command is not yet implemented in Node — do not add it until scoped.
+
+---
+
 ## Current Status
 
-Design phase complete. Scaffold in place. Python library implementation in progress.
-Node and Go packages are stubs — do not implement them yet.
+Both Python and Node packages are active and published.
 
-Focus: get `packages/python/` fully working with all tests passing.
+| Package | Version | PyPI / npm |
+|---|---|---|
+| `runspec` | 0.6.0 | PyPI |
+| `runspec-node` | 0.6.0 | npm (tag pending) |
+| `runspec-registry` | 0.1.1 | PyPI |
+
+**Next:** Node `run` command (local subprocess + remote SSH via ssh2, matching Python's `runspec run`).
 
 ---
 
