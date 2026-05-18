@@ -32,6 +32,7 @@ def main() -> None:
         "check": cmd_check,
         "emit": cmd_emit,
         "serve": cmd_serve,
+        "run": cmd_run,
     }
 
     if command not in commands:
@@ -114,6 +115,15 @@ def cmd_check(args: list[str]) -> None:
         else:
             ok.append(f"'{runnable_name}' — autonomy: {runnable['autonomy']}")
 
+        # Validate run_as patterns
+        run_as = runnable.get("run_as")
+        if isinstance(run_as, dict):
+            from runspec.serve import _validate_run_as_patterns
+
+            pattern_errors = _validate_run_as_patterns(run_as)
+            for err in pattern_errors:
+                errors.append(f"'{runnable_name}' run_as: {err}")
+
         for arg_name, arg in runnable.get("args", {}).items():
             if not arg.get("description") and arg.get("required"):
                 warnings.append(f"'{runnable_name}.{arg_name}' is required but has no description")
@@ -138,7 +148,98 @@ def cmd_serve(args: list[str]) -> None:
 
     registry_url = _get_flag(args, "--registry")
     name = _get_flag(args, "--name")
-    serve(registry_url=registry_url, name=name)
+    registry_key = _get_flag(args, "--registry-key")
+    registry_cert = _get_flag(args, "--registry-cert")
+    serve(registry_url=registry_url, name=name, registry_key=registry_key, registry_cert=registry_cert)
+
+
+def cmd_run(args: list[str]) -> None:
+    """Run a tool locally or remotely via SSH."""
+    from runspec.run import list_local_tools, list_registry_tools, run_local, run_remote
+
+    # Split on '--' to separate runspec flags from tool args
+    if "--" in args:
+        sep = args.index("--")
+        runspec_args = args[:sep]
+        tool_args = args[sep + 1 :]
+    else:
+        runspec_args = args
+        tool_args = []
+
+    host = _get_flag(runspec_args, "--host")
+    registry = _get_flag(runspec_args, "--registry")
+    registry_key = _get_flag(runspec_args, "--registry-key")
+    registry_cert = _get_flag(runspec_args, "--registry-cert")
+    ssh_user = _get_flag(runspec_args, "--user")
+    ssh_key = _get_flag(runspec_args, "--ssh-key")
+    no_host_key_check = "--no-host-key-check" in runspec_args
+
+    # First positional arg (not starting with --) is the tool name
+    tool_name = next((a for a in runspec_args if not a.startswith("-")), None)
+
+    if tool_name is None:
+        # No tool name — list available tools
+        if registry:
+            tools = list_registry_tools(registry, api_key=registry_key, cert=registry_cert)
+            if not tools:
+                print("No tools found in registry.")
+                return
+            print(f"Tools available via {registry}:\n")
+            for t in tools:
+                hosts_str = ", ".join(t.get("hosts", []))
+                desc = t.get("description") or ""
+                print(f"  {t['name']:<24} {desc}")
+                if hosts_str:
+                    print(f"  {'':24} hosts: {hosts_str}")
+        else:
+            tools = list_local_tools()
+            if not tools:
+                print("No tools found in local runspec.toml / pyproject.toml.")
+                print("Run 'runspec init' to get started.")
+                return
+            print("Local tools:\n")
+            for t in tools:
+                desc = t.get("description") or ""
+                print(f"  {t['name']:<24} {desc}")
+        return
+
+    if host:
+        # Remote mode
+        effective_registry = registry
+        if not effective_registry:
+            # Try to read from local config
+            from pathlib import Path as _Path
+
+            from runspec.finder import find_config
+            from runspec.loader import load_raw
+
+            try:
+                config_path, fmt = find_config(_Path.cwd())
+                raw = load_raw(config_path, fmt)
+                effective_registry = raw["config"].get("registry")
+            except FileNotFoundError:
+                pass
+
+        if not effective_registry:
+            print("✗  --registry is required for remote execution (or set [config] registry in runspec.toml)")
+            sys.exit(1)
+
+        rc = run_remote(
+            tool_name,
+            tool_args,
+            host=host,
+            registry_url=effective_registry,
+            ssh_user=ssh_user,
+            ssh_key=ssh_key,
+            no_host_key_check=no_host_key_check,
+            api_key=registry_key,
+            cert=registry_cert,
+        )
+        sys.exit(rc)
+    else:
+        # Local mode
+        rc = run_local(tool_name, tool_args)
+        sys.exit(rc)
 
 
 def cmd_init(args: list[str]) -> None:
@@ -535,10 +636,24 @@ Commands:
   check       Validate this project's runspec setup
   emit        Emit tool schemas for agent frameworks
   serve       Start the MCP stdio server for this environment
+  run         Run a tool locally or on a remote host via SSH
+
+Options for run:
+  <tool>               Tool name to run (omit to list available tools)
+  --host <host>        Remote host to run on (requires --registry or [config] registry)
+  --registry <url>     Registry base URL
+  --registry-key <k>   API key for registry read endpoints
+  --registry-cert <f>  CA certificate bundle for HTTPS registry
+  --user <user>        SSH username
+  --ssh-key <file>     Path to SSH private key
+  --no-host-key-check  Skip SSH host key verification (insecure)
+  --                   Separator: everything after is passed to the tool
 
 Options for serve:
-  --registry  Registry base URL (overrides [config] registry)
-  --name      Agent name reported to registry (overrides [config] name)
+  --registry       Registry base URL (overrides [config] registry)
+  --name           Instance name reported to registry (overrides [config] name)
+  --registry-key   API key for registry write endpoints
+  --registry-cert  CA certificate bundle path for HTTPS registry
 
 Options for init:
   --name      Runnable name (default: current directory name)
@@ -552,12 +667,12 @@ Options for emit:
   --format    Output format: mcp (default), openai, anthropic
 
 Examples:
+  runspec run                                    # list local tools
+  runspec run deploy                             # run locally
+  runspec run deploy -- --env prod               # run locally with args
+  runspec run deploy --host server-01            # run remotely via SSH
+  runspec run deploy --host server-01 -- --env prod
   runspec init
-  runspec init --name myapp
-  runspec init --file runspec
-  runspec discover
-  runspec discover --format mcp
   runspec check
-  runspec emit --name compress --format mcp
-  runspec emit --format openai
+  runspec serve --registry http://registry:8080
 """)

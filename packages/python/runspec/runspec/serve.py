@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import socket
 import subprocess
 import sys
 import sysconfig
@@ -28,7 +30,12 @@ _ERR_METHOD_NOT_FOUND = -32601
 _ERR_INVALID_PARAMS = -32602
 
 
-def serve(registry_url: str | None = None, name: str | None = None) -> None:
+def serve(
+    registry_url: str | None = None,
+    name: str | None = None,
+    registry_key: str | None = None,
+    registry_cert: str | None = None,
+) -> None:
     """
     Start the runspec MCP stdio server.
     Reads JSON-RPC requests from stdin, writes responses to stdout.
@@ -50,39 +57,68 @@ def serve(registry_url: str | None = None, name: str | None = None) -> None:
 
     raw = load_raw(config_path, fmt)
     config = raw["config"]
+    hostname = socket.gethostname()
+    scripts_dir = Path(sysconfig.get_path("scripts"))
 
     tools: dict[str, dict[str, Any]] = {}
     arg_specs: dict[str, dict[str, Any]] = {}
+    exec_specs: dict[str, dict[str, Any]] = {}
 
     for rname, runnable in raw["runnables"].items():
+        # Skip tools restricted to other hosts
+        allowed_hosts = runnable.get("hosts")
+        if allowed_hosts and hostname not in allowed_hosts:
+            continue
+
+        # Validate run_as patterns — exit with a clear error rather than silently misbehaving
+        pattern_errors = _validate_run_as_patterns(runnable.get("run_as"))
+        if pattern_errors:
+            for err in pattern_errors:
+                sys.stderr.write(f"runspec serve: {rname}.run_as: {err}\n")
+            sys.stderr.flush()
+            sys.exit(1)
+
         inferred = infer_script(runnable, config["autonomy_default"])
         tools[rname] = _build_schema(rname, inferred, "mcp")
         arg_specs[rname] = inferred.get("args", {})
 
-    scripts_dir = Path(sysconfig.get_path("scripts"))
+        exec_specs[rname] = {
+            "command": _find_script(rname, scripts_dir),  # Path | None
+            "run_as": _resolve_run_as(runnable.get("run_as"), hostname),
+            "become_method": runnable.get("become_method", "sudo"),
+            "become_flags": runnable.get("become_flags"),
+        }
 
-    # Resolve effective name and registry URL (CLI flags override config)
     effective_name = name or _server_name(config)
     effective_registry = registry_url or config.get("registry")
 
     if effective_registry:
         agent_id = str(uuid.uuid4())
         start_time = time.time()
-        tools_list = list(tools.values())
+        tools_list = _build_registry_tools_list(tools, exec_specs)
         heartbeat_interval = config.get("heartbeat", 30)
         heartbeat_data_fields: list[str] = config.get("heartbeat_data", [])
 
         try:
-            _registry_register(effective_registry, agent_id, effective_name, config["version"])
+            _registry_register(
+                effective_registry,
+                agent_id,
+                effective_name,
+                config["version"],
+                hostname,
+                registry_key,
+                registry_cert,
+            )
+            _registry_tools(effective_registry, agent_id, tools_list, registry_key, registry_cert)
         except Exception as e:
             sys.stderr.write(f"runspec serve: registry register failed: {e}\n")
             sys.stderr.flush()
 
         def _on_sigterm(signum: int, frame: Any) -> None:
-            try:
-                _registry_deregister(effective_registry, agent_id)
-            except Exception:
-                pass
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                _registry_deregister(effective_registry, agent_id, registry_key, registry_cert)
             sys.exit(0)
 
         signal.signal(signal.SIGTERM, _on_sigterm)
@@ -92,29 +128,48 @@ def serve(registry_url: str | None = None, name: str | None = None) -> None:
                 time.sleep(heartbeat_interval)
                 try:
                     status = _registry_heartbeat(
-                        effective_registry, agent_id, heartbeat_data_fields, start_time
+                        effective_registry,
+                        agent_id,
+                        heartbeat_data_fields,
+                        start_time,
+                        registry_key,
+                        registry_cert,
                     )
                     if status == "refresh":
-                        _registry_tools(effective_registry, agent_id, tools_list)
+                        _registry_tools(effective_registry, agent_id, tools_list, registry_key, registry_cert)
                 except Exception as e:
                     sys.stderr.write(f"runspec serve: heartbeat error: {e}\n")
                     sys.stderr.flush()
 
         threading.Thread(target=_heartbeat_loop, daemon=True).start()
 
-    _mcp_loop(tools, arg_specs, scripts_dir, effective_name)
+    _mcp_loop(tools, arg_specs, exec_specs, effective_name)
 
 
 # ── Registry client ────────────────────────────────────────────────────────────
 
 
-def _registry_register(base_url: str, agent_id: str, name: str, version: str) -> None:
-    _registry_post(base_url, "/register", {
-        "agent_id": agent_id,
-        "name": name,
-        "version": version,
-        "tools_seq": 1,
-    })
+def _registry_register(
+    base_url: str,
+    agent_id: str,
+    name: str,
+    version: str,
+    host: str,
+    api_key: str | None = None,
+    cert: str | None = None,
+) -> None:
+    _registry_request(
+        base_url,
+        "/instances",
+        {
+            "instance_id": agent_id,
+            "name": name,
+            "version": version,
+            "host": host,
+        },
+        api_key=api_key,
+        cert=cert,
+    )
 
 
 def _registry_heartbeat(
@@ -122,43 +177,95 @@ def _registry_heartbeat(
     agent_id: str,
     heartbeat_data_fields: list[str],
     start_time: float,
+    api_key: str | None = None,
+    cert: str | None = None,
 ) -> str:
-    body: dict[str, Any] = {"agent_id": agent_id, "tools_seq": 1}
+    body: dict[str, Any] = {}
     if "system" in heartbeat_data_fields:
         body["system"] = {"pid": os.getpid(), "uptime": int(time.time() - start_time)}
-    resp = _registry_post(base_url, "/heartbeat", body)
-    return resp.get("status", "ack")
+    resp = _registry_request(base_url, f"/instances/{agent_id}/heartbeat", body, api_key=api_key, cert=cert)
+    return str(resp.get("status", "ack"))
 
 
-def _registry_tools(base_url: str, agent_id: str, tools_list: list[dict[str, Any]]) -> None:
-    _registry_post(base_url, "/tools", {
-        "agent_id": agent_id,
-        "tools_seq": 1,
-        "tools": tools_list,
-    })
+def _registry_tools(
+    base_url: str,
+    agent_id: str,
+    tools_list: list[dict[str, Any]],
+    api_key: str | None = None,
+    cert: str | None = None,
+) -> None:
+    _registry_request(
+        base_url,
+        f"/instances/{agent_id}/tools",
+        {
+            "tools": tools_list,
+        },
+        api_key=api_key,
+        cert=cert,
+    )
 
 
-def _registry_deregister(base_url: str, agent_id: str) -> None:
-    _registry_post(base_url, "/deregister", {"agent_id": agent_id})
+def _registry_deregister(
+    base_url: str,
+    agent_id: str,
+    api_key: str | None = None,
+    cert: str | None = None,
+) -> None:
+    _registry_request(base_url, f"/instances/{agent_id}", {}, method="DELETE", api_key=api_key, cert=cert)
 
 
-def _registry_post(base_url: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
+def _registry_request(
+    base_url: str,
+    path: str,
+    body: dict[str, Any],
+    *,
+    method: str = "POST",
+    api_key: str | None = None,
+    cert: str | None = None,
+) -> dict[str, Any]:
+    import ssl
     import urllib.error
     import urllib.request
 
     url = base_url.rstrip("/") + path
-    payload = json.dumps(body).encode()
-    req = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
-    )
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["X-API-Key"] = api_key
+
+    payload = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(url, data=payload, headers=headers, method=method)
+    ctx = ssl.create_default_context(cafile=cert) if cert else None
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            result: dict[str, Any] = json.loads(resp.read().decode())
+            return result
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
         raise RuntimeError(f"HTTP {e.code} from {url}: {err_body}") from e
     except Exception as e:
         raise RuntimeError(f"Request to {url} failed: {e}") from e
+
+
+# ── Registry tool list builder ────────────────────────────────────────────────
+
+
+def _build_registry_tools_list(
+    tools: dict[str, dict[str, Any]],
+    exec_specs: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Augment MCP tool schemas with execution metadata for the registry."""
+    result = []
+    for name, schema in tools.items():
+        entry = dict(schema)
+        spec = exec_specs.get(name, {})
+        cmd = spec.get("command")
+        entry["x-command"] = str(cmd) if cmd else name
+        entry["x-run-as"] = spec.get("run_as", "")
+        entry["x-become-method"] = spec.get("become_method", "sudo")
+        if spec.get("become_flags"):
+            entry["x-become-flags"] = spec["become_flags"]
+        result.append(entry)
+    return result
 
 
 # ── MCP loop ──────────────────────────────────────────────────────────────────
@@ -167,7 +274,7 @@ def _registry_post(base_url: str, path: str, body: dict[str, Any]) -> dict[str, 
 def _mcp_loop(
     tools: dict[str, dict[str, Any]],
     arg_specs: dict[str, dict[str, Any]],
-    scripts_dir: Path,
+    exec_specs: dict[str, dict[str, Any]],
     server_name: str,
 ) -> None:
     for raw_line in sys.stdin:
@@ -180,7 +287,7 @@ def _mcp_loop(
             _write({"jsonrpc": "2.0", "id": None, "error": {"code": _ERR_PARSE, "message": "Parse error"}})
             continue
 
-        response = _dispatch(request, tools, arg_specs, scripts_dir, server_name)
+        response = _dispatch(request, tools, arg_specs, exec_specs, server_name)
         if response is not None:
             _write(response)
 
@@ -189,7 +296,7 @@ def _dispatch(
     request: dict[str, Any],
     tools: dict[str, dict[str, Any]],
     arg_specs: dict[str, dict[str, Any]],
-    scripts_dir: Path,
+    exec_specs: dict[str, dict[str, Any]],
     server_name: str,
 ) -> dict[str, Any] | None:
     method = request.get("method", "")
@@ -204,7 +311,7 @@ def _dispatch(
     if method == "tools/list":
         return _handle_tools_list(req_id, tools)
     if method == "tools/call":
-        return _handle_tools_call(req_id, request.get("params", {}), tools, arg_specs, scripts_dir)
+        return _handle_tools_call(req_id, request.get("params", {}), tools, arg_specs, exec_specs)
 
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": _ERR_METHOD_NOT_FOUND, "message": f"Method not found: {method}"}}
 
@@ -239,7 +346,7 @@ def _handle_tools_call(
     params: dict[str, Any],
     tools: dict[str, dict[str, Any]],
     arg_specs: dict[str, dict[str, Any]],
-    scripts_dir: Path,
+    exec_specs: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     name = params.get("name", "")
     arguments = params.get("arguments") or {}
@@ -251,19 +358,24 @@ def _handle_tools_call(
             "error": {"code": _ERR_INVALID_PARAMS, "message": f"Unknown tool: {name}"},
         }
 
-    cmd = _find_script(name, scripts_dir)
+    cmd: Path | None = exec_specs.get(name, {}).get("command")
     if cmd is None:
         return {
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "content": [{"type": "text", "text": f"Script not found in {scripts_dir}: {name}"}],
+                "content": [{"type": "text", "text": f"Script '{name}' not found. Place it alongside runspec.toml or in a bin/ subdirectory."}],
                 "isError": True,
             },
         }
 
-    argv = _args_to_argv(arguments, arg_specs.get(name, {}))
-    env = {**os.environ, "RUNSPEC_AGENT": "1"}
+    tool_arg_specs = arg_specs.get(name, {})
+    argv = _args_to_argv(arguments, tool_arg_specs)
+
+    from runspec.run import _args_to_runspec_env
+
+    runspec_env = _args_to_runspec_env(arguments, tool_arg_specs)
+    env = {**os.environ, "RUNSPEC_AGENT": "1", **runspec_env}
 
     result = subprocess.run([str(cmd), *argv], capture_output=True, text=True, env=env)
 
@@ -323,17 +435,74 @@ def _args_to_argv(arguments: dict[str, Any], arg_specs: dict[str, Any]) -> list[
     return argv
 
 
+# ── run_as helpers ────────────────────────────────────────────────────────────
+
+
+def _resolve_run_as(run_as_spec: Any, hostname: str) -> str:
+    """Resolve run_as to a plain string for the current host."""
+    if run_as_spec is None:
+        return ""
+
+    # Simple string or $ENV_VAR reference
+    if isinstance(run_as_spec, str):
+        if run_as_spec.startswith("$"):
+            return os.environ.get(run_as_spec[1:], "")
+        return run_as_spec
+
+    # Table form: hosts / patterns / default
+    if isinstance(run_as_spec, dict):
+        hosts = run_as_spec.get("hosts", {})
+        if hostname in hosts:
+            return str(hosts[hostname])
+
+        for pattern, user in run_as_spec.get("patterns", {}).items():
+            if re.fullmatch(pattern, hostname):
+                return str(user)
+
+        return str(run_as_spec.get("default", ""))
+
+    return ""
+
+
+def _validate_run_as_patterns(run_as_spec: Any) -> list[str]:
+    """Return a list of error messages for any invalid regex patterns."""
+    if not isinstance(run_as_spec, dict):
+        return []
+
+    errors: list[str] = []
+    for pattern in run_as_spec.get("patterns", {}):
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            errors.append(f"invalid pattern '{pattern}': {e}")
+    return errors
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+_SHELL_EXTS = ("", ".sh", ".ksh", ".bash", ".zsh")
+
+
 def _find_script(name: str, scripts_dir: Path) -> Path | None:
-    """Return the path to the named script in the venv scripts directory."""
-    candidate = scripts_dir / name
-    if candidate.exists():
-        return candidate
-    candidate_exe = scripts_dir / (name + ".exe")
-    if candidate_exe.exists():
-        return candidate_exe
+    """Return the path to the named script.
+
+    Search order:
+      1. Venv scripts dir — Python/Node entry points; also .exe on Windows
+      2. cwd/ — scripts living alongside runspec.toml
+      3. cwd/bin/ — scripts in a conventional bin subdirectory
+    """
+    for ext in (*_SHELL_EXTS, ".exe"):
+        candidate = scripts_dir / (name + ext)
+        if candidate.is_file():
+            return candidate
+
+    for directory in (Path.cwd(), Path.cwd() / "bin"):
+        for ext in _SHELL_EXTS:
+            candidate = directory / (name + ext)
+            if candidate.is_file():
+                return candidate
+
     return None
 
 

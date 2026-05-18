@@ -7,8 +7,6 @@ script discovery. Subprocess execution is tested via mocking.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from runspec.serve import (
     MCP_PROTOCOL_VERSION,
     _args_to_argv,
@@ -117,33 +115,32 @@ def test_tools_list_shape():
 
 DUMMY_TOOLS: dict = {"greet": {"name": "greet", "inputSchema": {"type": "object", "properties": {}}}}
 DUMMY_SPECS: dict = {"greet": {}}
-DUMMY_DIR = Path("/nonexistent/scripts")
+DUMMY_EXEC_SPECS: dict = {"greet": {"command": None}}
 
 
 def test_dispatch_initialize():
     req = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
-    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_DIR, "test-env")
+    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_EXEC_SPECS, "test-env")
     assert resp is not None
     assert "protocolVersion" in resp["result"]
 
 
 def test_dispatch_tools_list():
     req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
-    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_DIR, "test-env")
+    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_EXEC_SPECS, "test-env")
     assert resp is not None
     assert "tools" in resp["result"]
 
 
 def test_dispatch_notification_returns_none():
-    # Notifications have no id
     req = {"jsonrpc": "2.0", "method": "notifications/initialized"}
-    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_DIR, "test-env")
+    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_EXEC_SPECS, "test-env")
     assert resp is None
 
 
 def test_dispatch_unknown_method():
     req = {"jsonrpc": "2.0", "id": 5, "method": "unknown/method"}
-    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_DIR, "test-env")
+    resp = _dispatch(req, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_EXEC_SPECS, "test-env")
     assert resp is not None
     assert resp["error"]["code"] == -32601
 
@@ -152,17 +149,17 @@ def test_dispatch_unknown_method():
 
 
 def test_tools_call_unknown_tool():
-    resp = _handle_tools_call(3, {"name": "missing", "arguments": {}}, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_DIR)
+    resp = _handle_tools_call(3, {"name": "missing", "arguments": {}}, DUMMY_TOOLS, DUMMY_SPECS, DUMMY_EXEC_SPECS)
     assert resp["error"]["code"] == -32602
     assert "missing" in resp["error"]["message"]
 
 
-def test_tools_call_script_not_found(tmp_path):
+def test_tools_call_script_not_found():
     tools = {"greet": {"name": "greet", "inputSchema": {"type": "object", "properties": {}}}}
-    specs = {"greet": {}}
-    resp = _handle_tools_call(3, {"name": "greet", "arguments": {}}, tools, specs, tmp_path)
+    exec_specs = {"greet": {"command": None}}
+    resp = _handle_tools_call(3, {"name": "greet", "arguments": {}}, tools, {}, exec_specs)
     assert resp["result"]["isError"] is True
-    assert "Script not found" in resp["result"]["content"][0]["text"]
+    assert "greet" in resp["result"]["content"][0]["text"]
 
 
 def test_tools_call_success(tmp_path):
@@ -171,9 +168,9 @@ def test_tools_call_success(tmp_path):
     script.chmod(0o755)
 
     tools = {"greet": {"name": "greet", "inputSchema": {"type": "object", "properties": {}}}}
-    specs = {"greet": {}}
+    exec_specs = {"greet": {"command": script}}
 
-    resp = _handle_tools_call(3, {"name": "greet", "arguments": {}}, tools, specs, tmp_path)
+    resp = _handle_tools_call(3, {"name": "greet", "arguments": {}}, tools, {}, exec_specs)
     assert resp["result"]["isError"] is False
     assert "hello" in resp["result"]["content"][0]["text"]
 
@@ -184,9 +181,9 @@ def test_tools_call_failure(tmp_path):
     script.chmod(0o755)
 
     tools = {"deploy": {"name": "deploy", "inputSchema": {"type": "object", "properties": {}}}}
-    specs = {"deploy": {}}
+    exec_specs = {"deploy": {"command": script}}
 
-    resp = _handle_tools_call(4, {"name": "deploy", "arguments": {}}, tools, specs, tmp_path)
+    resp = _handle_tools_call(4, {"name": "deploy", "arguments": {}}, tools, {}, exec_specs)
     assert resp["result"]["isError"] is True
     text = resp["result"]["content"][0]["text"]
     assert "exit_code: 1" in text
@@ -199,23 +196,67 @@ def test_tools_call_sets_runspec_agent_env(tmp_path):
     script.chmod(0o755)
 
     tools = {"check_env": {"name": "check_env", "inputSchema": {"type": "object", "properties": {}}}}
-    specs = {"check_env": {}}
+    exec_specs = {"check_env": {"command": script}}
 
-    resp = _handle_tools_call(5, {"name": "check_env", "arguments": {}}, tools, specs, tmp_path)
+    resp = _handle_tools_call(5, {"name": "check_env", "arguments": {}}, tools, {}, exec_specs)
     assert "1" in resp["result"]["content"][0]["text"]
 
 
 # ── _find_script ──────────────────────────────────────────────────────────────
 
 
-def test_find_script_exists(tmp_path):
+def test_find_script_in_scripts_dir(tmp_path):
     (tmp_path / "deploy").touch()
     assert _find_script("deploy", tmp_path) == tmp_path / "deploy"
 
 
-def test_find_script_exe(tmp_path):
+def test_find_script_exe_in_scripts_dir(tmp_path):
     (tmp_path / "deploy.exe").touch()
     assert _find_script("deploy", tmp_path) == tmp_path / "deploy.exe"
+
+
+def test_find_script_sh_in_scripts_dir(tmp_path):
+    (tmp_path / "backup.sh").touch()
+    assert _find_script("backup", tmp_path) == tmp_path / "backup.sh"
+
+
+def test_find_script_ksh_in_scripts_dir(tmp_path):
+    (tmp_path / "validate.ksh").touch()
+    assert _find_script("validate", tmp_path) == tmp_path / "validate.ksh"
+
+
+def test_find_script_in_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    script = tmp_path / "backup-logs"
+    script.touch()
+    assert _find_script("backup-logs", tmp_path / "nonexistent-scripts") == script
+
+
+def test_find_script_sh_in_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    script = tmp_path / "backup-logs.sh"
+    script.touch()
+    assert _find_script("backup-logs", tmp_path / "nonexistent-scripts") == script
+
+
+def test_find_script_in_cwd_bin(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    script = bin_dir / "backup-logs"
+    script.touch()
+    assert _find_script("backup-logs", tmp_path / "nonexistent-scripts") == script
+
+
+def test_find_script_scripts_dir_takes_priority_over_cwd(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    scripts_dir = tmp_path / "venv_scripts"
+    scripts_dir.mkdir()
+    venv_script = scripts_dir / "deploy"
+    venv_script.touch()
+    cwd_script = tmp_path / "deploy"
+    cwd_script.touch()
+    assert _find_script("deploy", scripts_dir) == venv_script
 
 
 def test_find_script_missing(tmp_path):

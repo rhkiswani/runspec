@@ -148,8 +148,8 @@ rules, and current status — so you don't have to re-explain things each time.
 Once Claude Code starts, try this prompt to verify everything is working:
 
 ```
-Read CLAUDE.md. Then read packages/python/runspec/inference.py and
-packages/python/tests/test_inference.py. Tell me which inference rules
+Read CLAUDE.md. Then read packages/python/runspec/runspec/inference.py and
+packages/python/runspec/tests/test_inference.py. Tell me which inference rules
 are tested and which are missing test coverage.
 ```
 
@@ -164,7 +164,7 @@ Once you're comfortable, this is a good first real coding task:
 
 ```
 Read CLAUDE.md. Then read loader.py. Write a test file at
-packages/python/tests/test_loader.py that tests the load_raw function
+packages/python/runspec/tests/test_loader.py that tests the load_raw function
 for both pyproject.toml format and runspec.toml format. Use the fixtures
 in tests/integration/fixtures/ as reference for what valid TOML looks like.
 ```

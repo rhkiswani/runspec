@@ -1,14 +1,14 @@
 [project]
-name = "runspec"
-version = "0.3.0"
-description = "A language-agnostic, TOML-based interface specification for anything runnable"
+name = "runspec-registry"
+version = "0.1.0"
+description = "Read-only HTTP catalog for runspec tool instances"
 readme = "README.md"
-license = { file = "../../LICENSE" }
+license = { text = "MIT" }
 authors = [
     { name = "Jason Finestone", email = "jason@finestone.dev" }
 ]
 requires-python = ">=3.10"
-keywords = ["cli", "argparse", "arguments", "agents", "mcp", "tools"]
+keywords = ["cli", "mcp", "tools", "registry", "agents"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -18,46 +18,41 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries",
-    "Topic :: Utilities",
 ]
 
-# tomli provides tomllib for Python < 3.11 (stdlib from 3.11 onwards)
 dependencies = [
-    "tomli >= 2.0; python_version < '3.11'",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
-run = [
-    "paramiko>=3.0",
-]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
     "ruff>=0.4",
     "mypy>=1.10",
 ]
 
 [project.scripts]
-runspec = "runspec.cli:main"
+runspec-registry = "runspec_registry.cli:main"
 
 [project.urls]
 Homepage      = "https://JasonFinestone.github.io/runspec"
-Documentation = "https://JasonFinestone.github.io/runspec"
 Repository    = "https://github.com/JasonFinestone/runspec"
 Issues        = "https://github.com/JasonFinestone/runspec/issues"
-Changelog     = "https://github.com/JasonFinestone/runspec/blob/main/CHANGELOG.md"
 
 [build-system]
 requires      = ["setuptools>=69.0.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
-
 [tool.setuptools.packages.find]
 where = ["."]
 
 [tool.setuptools.package-data]
-runspec = ["py.typed"]
+runspec_registry = ["py.typed"]
 
 # ── ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]
@@ -79,9 +74,9 @@ disallow_untyped_defs  = true
 # ── pytest ────────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths    = ["tests"]
-addopts      = "--cov=runspec --cov-report=term-missing -v"
+addopts      = "--cov=runspec_registry --cov-report=term-missing -v"
 filterwarnings = ["error"]
 
 [tool.coverage.run]
-source = ["runspec"]
+source = ["runspec_registry"]
 omit   = ["tests/*"]

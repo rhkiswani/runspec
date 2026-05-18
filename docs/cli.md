@@ -2,7 +2,8 @@
 
 The `runspec` binary ships with `pip install runspec`. It provides commands
 for scaffolding, checking your config, discovering runnables, emitting agent
-schemas, and running a live MCP server.
+schemas, running a live MCP server, and executing tools locally or on remote
+hosts.
 
 ```
 runspec <command> [options]
@@ -93,6 +94,7 @@ Checks performed:
 - Every runnable has a `description` (agents need this)
 - Every runnable has an `autonomy` level declared
 - Required args without descriptions (agents won't know what to pass)
+- `run_as` patterns are valid Python `re.fullmatch()` expressions
 
 ### Example output
 
@@ -299,17 +301,104 @@ the top-level wrapper:
 Start a live MCP stdio server for the current environment.
 
 ```bash
-runspec serve
+runspec serve [options]
 ```
+
+| Flag | Description |
+|---|---|
+| `--registry <url>` | Registry URL. Overrides `[config] registry`. |
+| `--name <name>` | Instance name. Overrides `[config] name`. |
+| `--registry-key <key>` | API key for registry write endpoint authentication. |
+| `--registry-cert <path>` | Custom CA certificate bundle for HTTPS verification. |
 
 Reads the runspec config from the current directory, then starts a
 [Model Context Protocol](https://github.com/modelcontextprotocol/specification)
 server over stdin/stdout. The server exposes every runnable as an MCP tool.
-When an agent calls a tool, `serve` runs the corresponding script in the same
-virtual environment and streams back the output.
+When an agent calls a tool, `serve` runs the corresponding script and streams
+back the output.
 
 Zero extra dependencies — the protocol is JSON-RPC 2.0 newline-delimited
 over stdin/stdout, which is plain stdlib.
+
+### Host filtering
+
+If a runnable declares a `hosts` field, `serve` checks the current machine's
+hostname at startup. Tools that don't match are silently excluded from the MCP
+tool list and not sent to the registry. This lets you keep a single shared
+`runspec.toml` across a fleet while each host only exposes the tools relevant
+to it.
+
+```toml
+[parse-app-logs]
+description = "Parse and summarise application logs"
+autonomy    = "confirm"
+hosts       = ["logserver-01", "logserver-02"]
+```
+
+On any other host, `parse-app-logs` is invisible.
+
+### Privilege escalation (run_as)
+
+The `run_as` field controls which user a tool runs as when invoked remotely
+via `runspec run`. It is resolved by `serve` at startup against the current
+hostname, then registered with the registry as a plain string — so the
+resolution logic never leaves the local machine.
+
+```toml
+[deploy]
+run_as         = "oracle"
+become_method  = "sudo"      # default — also: su, pbrun, dzdo
+become_flags   = "-H"        # optional extra flags
+```
+
+Per-host and pattern-based resolution are supported — see `spec/SPEC.md` for
+the full `run_as` table syntax. Invalid regex patterns cause `serve` to exit
+with a clear error at startup, and `runspec check` validates them too.
+
+### Environment variables set on every tool invocation
+
+Before running a script, `serve` sets environment variables for every
+argument declared in the spec:
+
+```
+RUNSPEC_<ARG_NAME_UPPERCASED>=<value>
+```
+
+Hyphens become underscores. Bool and flag types are `1` or `0`. Defaults
+from the spec are always set, even when the caller did not pass the arg
+explicitly.
+
+`RUNSPEC_AGENT=1` is always set. Scripts can use it to switch between
+human-readable and machine-readable output:
+
+```python
+args = runspec.parse()
+
+if args.__agent__:
+    print(json.dumps({"status": "ok", "deployed_to": str(args.env)}))
+else:
+    print(f"✓ Deployed to {args.env}")
+```
+
+### Registry integration
+
+When `--registry` is set (or `[config] registry` is configured), `serve`
+registers itself with a `runspec-registry` instance on startup. The registry
+is a read-only catalog — it stores tool specs and host information but cannot
+execute anything. Any HTTP client on the network can query it to discover what
+tools are available and where.
+
+```toml
+# runspec.toml
+[config]
+registry  = "https://registry.internal:8080"
+name      = "analytics-pipeline"
+heartbeat = 30
+```
+
+`serve` sends a heartbeat every `heartbeat` seconds to keep its entry active.
+On SIGTERM it deregisters cleanly. If the registry restarts and loses state,
+the next heartbeat response triggers a full tool list resend automatically.
 
 ### Server name
 
@@ -320,13 +409,7 @@ The server identifies itself by the virtual environment directory name:
 /home/user/envs/data-pipeline/       →  server name: "data-pipeline"
 ```
 
-Override it in your config:
-
-```toml
-# runspec.toml or pyproject.toml [tool.runspec.config]
-[config]
-name = "my-pipeline"
-```
+Override it with `--name` or in your config.
 
 ### Connecting to Claude Desktop
 
@@ -371,19 +454,6 @@ script and returns its stdout.
 If the script exits non-zero, the tool returns `isError: true` with the exit
 code, stdout, and stderr — so the agent has full context on what went wrong.
 
-The `RUNSPEC_AGENT=1` environment variable is set for every script invocation
-via `serve`. Your runnable can read this via `args.__agent__` to switch to
-machine-readable output:
-
-```python
-args = runspec.parse()
-
-if args.__agent__:
-    print(json.dumps({"status": "ok", "deployed_to": str(args.env)}))
-else:
-    print(f"✓ Deployed to {args.env}")
-```
-
 ### Running as a service
 
 `serve` reads from stdin and writes to stdout — it stays alive until stdin
@@ -405,6 +475,213 @@ ExecStart=/home/user/envs/analytics-pipeline/bin/runspec serve
 WorkingDirectory=/home/user/projects/analytics
 Restart=always
 ```
+
+---
+
+## runspec run
+
+Run a tool locally or on a remote host via SSH.
+
+```bash
+runspec run [<tool>] [options] [-- tool-args...]
+```
+
+Everything after `--` is passed directly to the tool. Everything before it
+is interpreted by `runspec run`.
+
+| Flag | Description |
+|---|---|
+| `--host <host>` | Remote host to run on. Triggers SSH mode. |
+| `--registry <url>` | Registry URL for remote mode. Overrides `[config] registry`. |
+| `--registry-key <key>` | API key for registry read endpoints. |
+| `--registry-cert <path>` | CA certificate bundle for HTTPS registry. |
+| `--user <user>` | SSH username. |
+| `--ssh-key <file>` | Path to SSH private key. |
+| `--no-host-key-check` | Skip SSH host key verification (insecure — use only on trusted networks). |
+
+Paramiko is required for remote execution: `pip install 'runspec[run]'`.
+
+### List available tools
+
+With no tool name, `runspec run` lists what is available:
+
+```bash
+# From the local runspec.toml / pyproject.toml
+runspec run
+
+# From a registry
+runspec run --registry https://registry.internal:8080
+```
+
+```
+Local tools:
+
+  deploy                   Deploy the application to an environment
+  backup-logs              Back up application logs to S3
+  parse-errors             Parse error logs and return a summary
+```
+
+### Local mode
+
+Without `--host`, the tool runs on the current machine as the current user.
+No privilege escalation — if you need to run as a different user, wrap the
+call yourself:
+
+```bash
+runspec run deploy -- --env prod
+sudo -u oracle runspec run backup-logs -- --days 14
+```
+
+`runspec run` reads `runspec.toml` to find the tool, then locates its
+installed executable (the entry point from `[project.scripts]`, or the script
+on `PATH`). All resolved argument values are available to the script as
+`RUNSPEC_*` environment variables.
+
+### Remote mode
+
+With `--host`, `runspec run` queries the registry for that host's tool
+configuration, then SSHes and runs the command — applying any `run_as` and
+`become_method` that `runspec serve` resolved and registered for that host.
+
+```bash
+# Run deploy on server-01, passing args after --
+runspec run deploy --host server-01 -- --env prod
+
+# Explicit registry URL
+runspec run deploy --host server-01 \
+    --registry https://registry.internal:8080 \
+    -- --env prod
+
+# With a specific SSH user and key
+runspec run deploy --host server-01 --user deploy --ssh-key ~/.ssh/id_deploy \
+    -- --env prod
+```
+
+The registry URL can also be set in your local `runspec.toml`:
+
+```toml
+[config]
+registry = "https://registry.internal:8080"
+```
+
+### What remote mode does
+
+1. Queries the registry: `GET /tools/<name>` — finds the host entry for `--host`
+2. Reads `x-command`, `x-run-as`, `x-become-method`, `x-become-flags` from that entry
+3. Builds the remote command with privilege escalation (e.g. `sudo -u oracle /usr/local/bin/deploy --env prod`)
+4. Opens an SSH connection and runs the command
+5. Streams stdout and stderr to your terminal in real time
+6. Exits with the remote process's exit code
+
+The `run_as` and privilege escalation values were resolved by `runspec serve`
+on that host at startup — they reflect per-host resolution, pattern matching,
+and env var expansion. `runspec run` does not re-resolve them.
+
+---
+
+## Bash runnables
+
+Any executable script — bash, Python, Node, Ruby, or anything else — can be
+a first-class runspec runnable. The runspec spec defines the interface;
+`runspec serve` handles discovery, registration, and argument injection.
+
+### Structure
+
+Place the script and a `runspec.toml` in the same directory:
+
+```
+backup-logs/
+  runspec.toml
+  backup-logs.sh
+```
+
+```toml
+# runspec.toml
+[backup-logs]
+description = "Back up application logs to S3"
+autonomy    = "confirm"
+
+[backup-logs.args]
+env     = {type = "choice", options = ["prod", "staging"], description = "Target environment"}
+days    = {type = "int", default = 7, description = "Days of logs to retain"}
+dry-run = {type = "flag", description = "Print what would happen without doing it"}
+```
+
+### Reading arguments
+
+Before running the script, `runspec serve` (and `runspec run`) set all
+resolved argument values as `RUNSPEC_*` environment variables. The script
+reads them directly — no library, no parsing, no `eval`:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+if [ "$RUNSPEC_DRY_RUN" = "1" ]; then
+    echo "Would sync $RUNSPEC_DAYS days of $RUNSPEC_ENV logs"
+    exit 0
+fi
+
+aws s3 sync "/var/log/app/$RUNSPEC_ENV" "s3://logs-$RUNSPEC_ENV" \
+    --delete \
+    --exclude "*.tmp"
+
+echo "Backed up $RUNSPEC_DAYS days of $RUNSPEC_ENV logs"
+```
+
+### Environment variable convention
+
+| Arg name | Variable | Arg type | Value when true | Value when false |
+|---|---|---|---|---|
+| `env` | `RUNSPEC_ENV` | `str` / `choice` | the string value | — |
+| `days` | `RUNSPEC_DAYS` | `int` | the number as a string | — |
+| `dry-run` | `RUNSPEC_DRY_RUN` | `flag` | `1` | `0` |
+| `verbose` | `RUNSPEC_VERBOSE` | `bool` | `1` | `0` |
+
+Hyphens become underscores. `RUNSPEC_AGENT=1` is always set.
+Defaults from the spec are always present — the script never receives an unset
+variable for a declared arg.
+
+### Scripts must live alongside runspec.toml
+
+`runspec serve` only looks for scripts in two places: the venv `bin/` (for
+Python and Node entry points) and the directory containing your `runspec.toml`
+or its `bin/` subdirectory. Arbitrary paths elsewhere on the filesystem are
+not supported.
+
+This is intentional — it keeps tool collections self-contained, version
+controlled, and auditable. If you have existing scripts scattered across
+`/opt/scripts/` or similar, the migration path is to copy them into a proper
+project directory with a `runspec.toml` and commit everything together. Most
+scripts need changes to read `$RUNSPEC_*` variables anyway, so the migration
+is a natural part of adding runspec support. If you want to keep calling your
+original scripts unchanged, a thin wrapper is fine:
+
+```bash
+#!/usr/bin/env bash
+# backup-oracle — lives in the runspec project, calls the original
+exec /opt/legacy-scripts/backup-oracle.sh "$@"
+```
+
+### Running a bash runnable
+
+The workflow is identical to Python or Node:
+
+```bash
+# Start the MCP server (bash script is exposed as a tool)
+cd backup-logs/
+runspec serve
+
+# Run it locally
+runspec run backup-logs -- --env staging
+
+# Run it on a remote host
+runspec run backup-logs --host logserver-01 -- --env prod
+```
+
+From an agent's perspective, a bash runnable looks identical to a Python or
+Node runnable. The registry, the MCP tool schema, and the `runspec run`
+interface are the same regardless of the language the script is written in.
 
 ---
 
