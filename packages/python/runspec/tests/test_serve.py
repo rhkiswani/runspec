@@ -347,9 +347,8 @@ def test_server_name_ignores_non_string():
 def test_serve_dev_exits_when_no_configs_found(capsys):
     from unittest.mock import patch
 
-    with patch("runspec.finder.find_configs_dev", return_value=[]):
-        with pytest.raises(SystemExit) as exc:
-            serve(dev=True)
+    with patch("runspec.finder.find_configs_dev", return_value=[]), pytest.raises(SystemExit) as exc:
+        serve(dev=True)
 
     assert exc.value.code == 1
     captured = capsys.readouterr()

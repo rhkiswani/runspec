@@ -12,7 +12,6 @@ import pytest
 
 from runspec.finder import find_config, find_configs_dev
 
-
 # ── find_config ───────────────────────────────────────────────────────────────
 
 
