@@ -175,7 +175,7 @@ class TestPathProtocol:
         a = arg(tmp_path, type="path")
         assert Path(a) == tmp_path
 
-    @pytest.mark.skipif(sys.version_info < (3, 11), reason="Path.glob() requires exact str on Python 3.10 (sys.intern limitation)")
+    @pytest.mark.skipif(sys.version_info < (3, 12), reason="Path.glob() requires exact str before Python 3.12 (pathlib internals rewritten in 3.12)")
     def test_glob_accepts_str_arg_as_pattern(self, tmp_path):
         (tmp_path / "a.txt").touch()
         (tmp_path / "b.txt").touch()
