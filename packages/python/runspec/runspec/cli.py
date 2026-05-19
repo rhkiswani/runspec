@@ -80,7 +80,7 @@ def cmd_local(args: list[str]) -> None:
 
 
 def cmd_serve(args: list[str]) -> None:
-    """Start the MCP stdio server for this environment."""
+    """Start the MCP stdio server for local runnables."""
     from runspec.serve import serve
 
     registry_url = _get_flag(args, "--registry")
@@ -905,7 +905,7 @@ Usage:
 Commands:
   init        Scaffold a new runnable — config and code stub
   local       Discover and validate runnables in this environment
-  serve       Start the MCP stdio server for this environment
+  serve       Start the MCP stdio server for local runnables
   jump        List or run tools on a jump box via SSH
 
 Options for init:
