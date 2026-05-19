@@ -27,7 +27,8 @@ def main() -> None:
     command = args[0]
     rest = args[1:]
 
-    if "-h" in rest or "--help" in rest:
+    pre_sep = rest[: rest.index("--")] if "--" in rest else rest
+    if "-h" in pre_sep or "--help" in pre_sep:
         _print_help()
         return
 
