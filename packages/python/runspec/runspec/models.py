@@ -8,6 +8,7 @@ RunSpec — the full parsed result for a script
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -133,6 +134,15 @@ class Arg:
         if isinstance(other, Arg):
             return self.value % other.value
         return self.value % other
+
+    def __fspath__(self) -> str:
+        return os.fspath(self.value)
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __getitem__(self, key: Any) -> Any:
+        return self.value[key]
 
     def __iter__(self) -> Any:
         """Allow iteration when value is a list (multiple=true args)."""

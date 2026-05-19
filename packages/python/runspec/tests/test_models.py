@@ -156,3 +156,73 @@ class TestIterationProtocol:
 
     def test_len_on_string(self):
         assert len(arg("hello")) == 5
+
+
+class TestPathProtocol:
+    def test_fspath_returns_string(self, tmp_path):
+        import os
+
+        a = arg(tmp_path, type="path")
+        assert os.fspath(a) == str(tmp_path)
+
+    def test_path_constructor_accepts_arg(self, tmp_path):
+        from pathlib import Path
+
+        a = arg(tmp_path, type="path")
+        assert Path(a) == tmp_path
+
+    def test_glob_accepts_str_arg_as_pattern(self, tmp_path):
+        (tmp_path / "a.txt").touch()
+        (tmp_path / "b.txt").touch()
+        directory = arg(tmp_path, type="path")
+        pattern = arg("*.txt", type="str")
+        matches = list(directory.glob(pattern))
+        assert len(matches) == 2
+
+    def test_fspath_raises_for_non_path(self):
+        import os
+
+        a = arg(42, type="int")
+        try:
+            os.fspath(a)
+            raise AssertionError("expected TypeError")
+        except TypeError:
+            pass
+
+
+class TestHashProtocol:
+    def test_arg_hashable(self):
+        a = arg("hello")
+        assert hash(a) == hash("hello")
+
+    def test_arg_usable_in_set(self):
+        a = arg("x")
+        b = arg("y")
+        s = {a, b}
+        assert len(s) == 2
+
+    def test_arg_usable_as_dict_key(self):
+        a = arg("key")
+        d = {a: "value"}
+        assert d[a] == "value"
+
+    def test_equal_args_have_same_hash(self):
+        a = arg(5, type="int")
+        b = arg(5, type="int")
+        assert a == b
+        assert hash(a) == hash(b)
+
+
+class TestIndexProtocol:
+    def test_getitem_on_list(self):
+        a = arg(["x", "y", "z"], type="str")
+        assert a[0] == "x"
+        assert a[2] == "z"
+
+    def test_getitem_on_string(self):
+        a = arg("hello")
+        assert a[1] == "e"
+
+    def test_getitem_slice(self):
+        a = arg([10, 20, 30, 40], type="int")
+        assert a[1:3] == [20, 30]
