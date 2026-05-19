@@ -376,6 +376,7 @@ def test_write_project_pyproject_content(tmp_path, monkeypatch):
     assert 'greet = "mypkg.greet:main"' in content
     assert 'build-backend = "hatchling.build"' in content
     assert 'requires      = ["hatchling"]' in content
+    assert 'packages = ["mypkg"]' in content
 
 
 def test_write_project_pyproject_is_valid_toml(tmp_path, monkeypatch):

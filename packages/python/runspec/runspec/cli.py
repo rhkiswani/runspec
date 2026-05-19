@@ -486,6 +486,9 @@ def _build_pyproject(runnable_name: str, pkg_name: str, example: bool = False) -
         f"[project.scripts]\n"
         f"{scripts}"
         f"\n"
+        f"[tool.hatch.build.targets.wheel]\n"
+        f'packages = ["{pkg_name}"]\n'
+        f"\n"
         f"[build-system]\n"
         f'requires      = ["hatchling"]\n'
         f'build-backend = "hatchling.build"\n'
