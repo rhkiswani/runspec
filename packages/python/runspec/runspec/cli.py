@@ -2,7 +2,7 @@
 cli.py — The runspec command-line interface.
 
 Commands:
-    runspec init    [--name <name>] [--lang python|typescript|javascript]
+    runspec init    [--name <name>] [--lang python|typescript|javascript] [--example]
     runspec local   [--format text|json|mcp|openai|anthropic] [--script <name>]
     runspec serve   [--dev] [--registry <url>] [--name <name>] ...
     runspec jump    [<tool>] [--host <host>] [--registry <url>] [-- tool-args...]
@@ -181,13 +181,25 @@ def cmd_init(args: list[str]) -> None:
     """Scaffold a new runnable — config and code stub."""
     name_flag = _get_flag(args, "--name")
     lang_flag = _get_flag(args, "--lang") or "python"
+    example = "--example" in args
+    write_project, project_root_arg = _get_optional_flag(args, "--write-project", default="..")
 
     cwd = Path.cwd()
-    runnable_name = name_flag or _sanitize_name(cwd.name)
+    pkg_name = _sanitize_name(cwd.name)
+    runnable_name = name_flag or ("clean" if example else pkg_name)
     runspec_toml = cwd / "runspec.toml"
 
-    _init_runspec_toml(runspec_toml, runnable_name)
-    _init_code_stub(cwd, runnable_name, lang_flag)
+    _init_runspec_toml(runspec_toml, runnable_name, example=example)
+    _init_code_stub(cwd, runnable_name, lang_flag, example=example)
+
+    if write_project:
+        project_root = (cwd / project_root_arg).resolve()
+        _init_package_init(cwd)
+        _init_pyproject(project_root, runnable_name, pkg_name)
+        _print_next_steps(install_from=project_root_arg)
+    else:
+        _print_pyproject_snippet(runnable_name, pkg_name)
+        _print_next_steps(install_from=None)
 
 
 def _sanitize_name(raw: str) -> str:
@@ -198,16 +210,76 @@ def _sanitize_name(raw: str) -> str:
     return s or "myscript"
 
 
-def _init_runspec_toml(path: Path, name: str) -> None:
+def _init_runspec_toml(path: Path, name: str, example: bool = False) -> None:
     if path.exists():
         print(f"✗  {path.name} already exists — already initialized")
         print(f"   Edit {path.name} directly to add more runnables.")
         sys.exit(1)
 
-    content = f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n'
+    content = (
+        _build_example_toml(name)
+        if example
+        else (f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n')
+    )
     _write_and_verify(path, content, None)
     print(f"  ✓  Created runspec.toml with [{name}] runnable")
 
+
+def _build_example_toml(name: str) -> str:
+    return (
+        f"[{name}]\n"
+        f'description = "Find and optionally delete stale temporary files in a directory"\n'
+        f'autonomy    = "confirm"\n'
+        f"\n"
+        f"[{name}.args]\n"
+        f'directory  = {{type = "path",   description = "Directory to scan",                            default = "."}}\n'
+        f'pattern    = {{type = "str",    description = "Glob pattern to match",                        default = "*.tmp"}}\n'
+        f'older_than = {{type = "int",    description = "Only match files older than N days",           default = 7}}\n'
+        f'format     = {{type = "choice", description = "Output format", options = ["text", "json"],    default = "text"}}\n'
+        f'delete     = {{type = "flag",   description = "Delete matched files (asks for confirmation)", default = false}}\n'
+    )
+
+
+_EXAMPLE_PYTHON_STUB = """\
+import json
+import time
+
+from runspec import parse
+
+
+def main():
+    args = parse()
+
+    cutoff = time.time() - args.older_than * 86400
+    matches = [p for p in args.directory.glob(args.pattern) if p.is_file() and p.stat().st_mtime < cutoff]
+
+    if not matches:
+        print(f"No '{args.pattern}' files older than {args.older_than} days found in {args.directory}.")
+        return
+
+    if args.format == "json":
+        data = [
+            {"path": str(p), "size": p.stat().st_size, "days_old": int((time.time() - p.stat().st_mtime) / 86400)}
+            for p in matches
+        ]
+        print(json.dumps(data, indent=2))
+    else:
+        print(f"Found {len(matches)} file(s) matching '{args.pattern}' older than {args.older_than} days:")
+        print()
+        for p in matches:
+            days = int((time.time() - p.stat().st_mtime) / 86400)
+            print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
+
+    if args.delete:
+        for p in matches:
+            p.unlink()
+        print()
+        print(f"Deleted {len(matches)} file(s).")
+
+
+if __name__ == "__main__":
+    main()
+"""
 
 _CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
     "python": (
@@ -225,13 +297,21 @@ _CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
 }
 
 
-def _init_code_stub(directory: Path, name: str, lang: str) -> None:
+def _init_code_stub(directory: Path, name: str, lang: str, example: bool = False) -> None:
+    if example and lang != "python":
+        print(f"  ℹ  --example is only available for Python — using minimal stub for {lang}")
+        example = False
+
     if lang not in _CODE_STUB_TEMPLATES:
         print(f"✗  Unknown --lang: {lang}")
         print("   Supported: python, typescript, javascript")
         sys.exit(1)
 
-    ext, content = _CODE_STUB_TEMPLATES[lang]
+    if example:
+        ext, content = ".py", _EXAMPLE_PYTHON_STUB
+    else:
+        ext, content = _CODE_STUB_TEMPLATES[lang]
+
     stub_path = directory / (name + ext)
 
     if stub_path.exists():
@@ -240,8 +320,76 @@ def _init_code_stub(directory: Path, name: str, lang: str) -> None:
         stub_path.write_text(content, encoding="utf-8")
         print(f"  ✓  Created {stub_path.name}")
 
-    print("     Move both files inside your package directory before publishing.")
-    print("     Run 'runspec local' to see installed runnables and validate your setup.")
+
+def _init_package_init(directory: Path) -> None:
+    init_path = directory / "__init__.py"
+    if init_path.exists():
+        print("  ℹ  __init__.py already exists — skipped")
+    else:
+        init_path.write_text("", encoding="utf-8")
+        print("  ✓  Created __init__.py")
+
+
+def _init_pyproject(project_root: Path, runnable_name: str, pkg_name: str) -> None:
+    pyproject = project_root / "pyproject.toml"
+    entry_point = f"{pkg_name}.{runnable_name}:main"
+
+    if pyproject.exists():
+        print(f"  ℹ  {pyproject} already exists — add this entry manually:")
+        print("       [project.scripts]")
+        print(f'       {runnable_name} = "{entry_point}"')
+    else:
+        pyproject.write_text(_build_pyproject(runnable_name, pkg_name), encoding="utf-8")
+        print(f"  ✓  Created {pyproject}")
+
+
+def _build_pyproject(runnable_name: str, pkg_name: str) -> str:
+    entry_point = f"{pkg_name}.{runnable_name}:main"
+    return (
+        f"[project]\n"
+        f'name            = "{runnable_name}"\n'
+        f'version         = "0.1.0"\n'
+        f'description     = ""\n'
+        f'requires-python = ">=3.10"\n'
+        f'dependencies    = ["runspec"]\n'
+        f"\n"
+        f"[project.optional-dependencies]\n"
+        f'dev = ["pytest", "ruff"]\n'
+        f"\n"
+        f"[project.scripts]\n"
+        f'{runnable_name} = "{entry_point}"\n'
+        f"\n"
+        f"[build-system]\n"
+        f'requires      = ["setuptools>=69.0.2", "wheel"]\n'
+        f'build-backend = "setuptools.build_meta"\n'
+    )
+
+
+def _print_pyproject_snippet(runnable_name: str, pkg_name: str) -> None:
+    entry_point = f"{pkg_name}.{runnable_name}:main"
+    print()
+    print("  To register this runnable, add to your pyproject.toml:")
+    print()
+    print("    [project.scripts]")
+    print(f'    {runnable_name} = "{entry_point}"')
+
+
+def _print_next_steps(install_from: str | None) -> None:
+    print()
+    print("  Next steps:")
+    if install_from is None:
+        print("    1. Move both files inside your package directory before publishing")
+        print("    2. Install before running:")
+        print("         pip install -e .")
+        print("         uv sync              # uv")
+        print("         poetry install       # poetry")
+        print("    3. Run 'runspec local' to validate your setup")
+    else:
+        print("    1. Install before running (from project root):")
+        print("         pip install -e .")
+        print("         uv sync              # uv")
+        print("         poetry install       # poetry")
+        print("    2. Run 'runspec local' to validate your setup")
 
 
 def _write_and_verify(path: Path, content: str, original: str | None) -> None:
@@ -528,6 +676,21 @@ def _get_flag(args: list[str], flag: str, default: str | None = None) -> str | N
         return default
 
 
+def _get_optional_flag(args: list[str], flag: str, default: str | None = None) -> tuple[bool, str | None]:
+    """Return (present, value) for a flag whose value argument is optional.
+
+    If the token after the flag exists and does not start with '-', it is
+    consumed as the value.  Otherwise the supplied default is used.
+    """
+    try:
+        idx = args.index(flag)
+    except ValueError:
+        return False, None
+    if idx + 1 < len(args) and not args[idx + 1].startswith("-"):
+        return True, args[idx + 1]
+    return True, default
+
+
 def _print_help() -> None:
     print("""runspec — interface specification for anything runnable
 
@@ -564,8 +727,12 @@ Options for jump:
   --                   Separator: everything after is passed to the tool
 
 Options for init:
-  --name      Runnable name (default: current directory name)
-  --lang      Language for code stub: python (default), typescript, javascript
+  --name           Runnable name (default: current directory name, or 'clean' with --example)
+  --lang           Language for code stub: python (default), typescript, javascript
+  --example        Generate a full working example (stale temp file cleaner)
+  --write-project  Generate pyproject.toml, __init__.py, and print entry point wiring.
+                   Writes one level up by default (you are inside your package directory).
+                   Supply an explicit path to override: --write-project /path/to/project
 
 Examples:
   runspec local                                  # list installed runnables + validate
@@ -576,7 +743,10 @@ Examples:
   runspec jump deploy --host jumpbox-01 -- --env prod
   runspec jump deploy --host jumpbox-01 --user deploy --ssh-key ~/.ssh/id_deploy -- --env prod
   runspec init
+  runspec init --example
+  runspec init --example --write-project
   runspec init --name myapp --lang typescript
+  runspec init --write-project /path/to/project
   runspec serve
   runspec serve --registry http://registry:8080
   runspec serve --dev

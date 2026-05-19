@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from runspec.cli import _sanitize_name, cmd_init
+from runspec.cli import _get_optional_flag, _sanitize_name, cmd_init
 
 # ── _sanitize_name ────────────────────────────────────────────────────────────
 
@@ -152,6 +152,217 @@ def test_does_not_overwrite_existing_stub(tmp_path, monkeypatch, capsys):
     existing.write_text("# existing\n", encoding="utf-8")
 
     cmd_init(["--name", "greet"])
+
+    assert existing.read_text() == "# existing\n"
+    assert "already exists" in capsys.readouterr().out
+
+
+# ── install message ───────────────────────────────────────────────────────────
+
+
+def test_install_message_shown_on_standard_init(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "myapp"])
+    out = capsys.readouterr().out
+    assert "pip install -e ." in out
+    assert "uv sync" in out
+    assert "poetry install" in out
+    assert "runspec local" in out
+
+
+def test_pyproject_snippet_shown_on_standard_init(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "greet"])
+    out = capsys.readouterr().out
+    assert "[project.scripts]" in out
+    assert "greet" in out
+
+
+# ── --example mode ────────────────────────────────────────────────────────────
+
+
+def test_example_defaults_to_clean_runnable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    toml = tmp_path / "runspec.toml"
+    assert toml.exists()
+    assert "[clean]" in toml.read_text()
+    assert (tmp_path / "clean.py").exists()
+
+
+def test_example_with_custom_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example", "--name", "sweep"])
+
+    toml = tmp_path / "runspec.toml"
+    assert "[sweep]" in toml.read_text()
+    assert (tmp_path / "sweep.py").exists()
+
+
+def test_example_toml_has_all_arg_types(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    content = (tmp_path / "runspec.toml").read_text()
+    assert 'type = "path"' in content
+    assert 'type = "str"' in content
+    assert 'type = "int"' in content
+    assert 'type = "choice"' in content
+    assert 'type = "flag"' in content
+    assert 'autonomy    = "confirm"' in content
+
+
+def test_example_toml_is_valid(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    from runspec.loader import load_raw
+
+    raw = load_raw(tmp_path / "runspec.toml")
+    assert "clean" in raw["runnables"]
+    args = raw["runnables"]["clean"]["args"]
+    assert set(args) == {"directory", "pattern", "older_than", "format", "delete"}
+
+
+def test_example_python_stub_syntax(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    import ast
+
+    ast.parse((tmp_path / "clean.py").read_text())
+
+
+def test_example_python_stub_uses_parse(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    content = (tmp_path / "clean.py").read_text()
+    assert "from runspec import parse" in content
+    assert "args = parse()" in content
+    assert "args.delete" in content
+    assert "args.format" in content
+
+
+def test_example_install_message_shown(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+    out = capsys.readouterr().out
+    assert "pip install -e ." in out
+    assert "uv sync" in out
+    assert "poetry install" in out
+
+
+# ── _get_optional_flag ────────────────────────────────────────────────────────
+
+
+def test_optional_flag_absent():
+    assert _get_optional_flag([], "--write-project", default="..") == (False, None)
+
+
+def test_optional_flag_present_no_value():
+    assert _get_optional_flag(["--write-project"], "--write-project", default="..") == (True, "..")
+
+
+def test_optional_flag_present_with_value():
+    assert _get_optional_flag(["--write-project", "/tmp/proj"], "--write-project", default="..") == (True, "/tmp/proj")
+
+
+def test_optional_flag_stops_at_next_flag():
+    assert _get_optional_flag(["--write-project", "--example"], "--write-project", default="..") == (True, "..")
+
+
+# ── --write-project: file generation ─────────────────────────────────────────
+
+
+def test_write_project_creates_pyproject(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    assert (tmp_path / "pyproject.toml").exists()
+
+
+def test_write_project_creates_init_py(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    assert (pkg / "__init__.py").exists()
+
+
+def test_write_project_pyproject_content(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+
+    content = (tmp_path / "pyproject.toml").read_text()
+    assert 'name            = "greet"' in content
+    assert 'dependencies    = ["runspec"]' in content
+    assert 'greet = "mypkg.greet:main"' in content
+    assert 'build-backend = "setuptools.build_meta"' in content
+    assert "setuptools>=69" in content
+    assert "setuptools.backends.legacy" not in content
+
+
+def test_write_project_pyproject_is_valid_toml(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+
+    import sys
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+    with open(tmp_path / "pyproject.toml", "rb") as f:
+        parsed = tomllib.load(f)
+    assert parsed["project"]["name"] == "greet"
+    assert parsed["project"]["scripts"]["greet"] == "mypkg.greet:main"
+    assert parsed["build-system"]["build-backend"] == "setuptools.build_meta"
+
+
+def test_write_project_skips_existing_pyproject(tmp_path, monkeypatch, capsys):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    existing = tmp_path / "pyproject.toml"
+    existing.write_text("[project]\nname = 'existing'\n", encoding="utf-8")
+
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+
+    assert existing.read_text() == "[project]\nname = 'existing'\n"
+    out = capsys.readouterr().out
+    assert "already exists" in out
+    assert "[project.scripts]" in out
+    assert "greet" in out
+
+
+def test_write_project_with_example(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--example", "--write-project", str(tmp_path)])
+
+    assert (tmp_path / "pyproject.toml").exists()
+    assert (pkg / "clean.py").exists()
+    assert (pkg / "__init__.py").exists()
+    content = (tmp_path / "pyproject.toml").read_text()
+    assert 'clean = "mypkg.clean:main"' in content
+
+
+def test_write_project_skips_existing_init_py(tmp_path, monkeypatch, capsys):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    existing = pkg / "__init__.py"
+    existing.write_text("# existing\n", encoding="utf-8")
+
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
 
     assert existing.read_text() == "# existing\n"
     assert "already exists" in capsys.readouterr().out
