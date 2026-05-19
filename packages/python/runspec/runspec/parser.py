@@ -30,11 +30,19 @@ def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunS
 
     Returns:
         RunSpec — the fully parsed, validated, coerced argument namespace.
-
-    Raises:
-        RunSpecError:      if required args are missing or validation fails
-        FileNotFoundError: if no runspec config is found
     """
+    try:
+        return _parse_impl(script_name, argv)
+    except errors.RunSpecError as e:
+        print(str(e))
+        sys.exit(1)
+    except FileNotFoundError as e:
+        print(str(e))
+        sys.exit(1)
+
+
+def _parse_impl(script_name: str | None = None, argv: list[str] | None = None) -> RunSpec:
+    """Internal: full parse pipeline. Raises on error — call parse() for CLI use."""
     # 1. Find config
     config_path = find_config()
 

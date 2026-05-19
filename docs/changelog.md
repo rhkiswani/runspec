@@ -4,6 +4,27 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.3 — 2026-05-19
+
+### Fixed
+
+**`parse()` never produces a traceback.** All expected error conditions
+now print a clean, human-readable message and exit with code 1:
+
+- **Missing required argument** — `✗  Missing required argument: --name`
+- **Invalid choice** — `✗  Invalid value for --format: 'xml' / Expected one of: text, json`
+- **Invalid type** — e.g. passing `abc` for an `int` arg
+- **No `runspec.toml` found** — `No runspec.toml found. Run 'runspec init'...`
+
+Previously these conditions raised `RunSpecError` or `FileNotFoundError`
+and showed a Python traceback if the caller didn't catch them. `parse()`
+now handles these internally, matching the behaviour of `argparse.parse_args()`.
+
+**Generated stubs** now also wrap `parse()` in a `try/except` as a
+belt-and-suspenders guard for unexpected errors in the stub's own code.
+
+---
+
 ## 0.8.2 — 2026-05-19
 
 ### Fixed

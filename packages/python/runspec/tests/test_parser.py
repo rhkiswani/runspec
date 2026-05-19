@@ -1,12 +1,77 @@
 """
 Tests for parser._parse_argv — raw argv → dict conversion.
+Tests for parse() — clean error handling (no tracebacks to user).
 """
 
 from __future__ import annotations
 
+import textwrap
+
 import pytest
 
+import runspec
 from runspec.parser import _parse_argv
+
+
+# ── parse() error handling ────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def spec_dir(tmp_path, monkeypatch):
+    (tmp_path / "runspec.toml").write_text(
+        textwrap.dedent("""\
+            [clean]
+            [clean.args.directory]
+            type = "path"
+            default = "."
+            [clean.args.count]
+            type = "int"
+            default = 10
+            [clean.args.format]
+            type = "choice"
+            options = ["text", "json"]
+            default = "text"
+            [clean.args.name]
+            type = "str"
+            required = true
+        """),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+class TestParseCleanErrors:
+    def test_missing_required_arg_exits_cleanly(self, spec_dir, capsys):
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="clean", argv=[])
+        assert exc.value.code == 1
+        assert "Missing required argument" in capsys.readouterr().out
+
+    def test_invalid_type_exits_cleanly(self, spec_dir, capsys):
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="clean", argv=["--name", "x", "--count", "abc"])
+        assert exc.value.code == 1
+        assert "--count" in capsys.readouterr().out
+
+    def test_invalid_choice_exits_cleanly(self, spec_dir, capsys):
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="clean", argv=["--name", "x", "--format", "xml"])
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "--format" in out
+        assert "text" in out
+
+    def test_no_config_exits_cleanly(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="clean", argv=[])
+        assert exc.value.code == 1
+        assert "runspec.toml" in capsys.readouterr().out
+
+    def test_valid_args_return_runspec(self, spec_dir):
+        result = runspec.parse(script_name="clean", argv=["--name", "hello"])
+        assert result.name == "hello"
 
 
 class TestParseArgvHappyPath:
