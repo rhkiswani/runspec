@@ -307,6 +307,12 @@ def main():
             print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
     if args.delete:
+        if not args.__agent__:
+            print()
+            confirm = input(f"Delete {len(matches)} file(s)? [y/N] ")
+            if confirm.strip().lower() != "y":
+                print("Aborted.")
+                return
         for p in matches:
             p.unlink()
         print()
