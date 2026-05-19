@@ -4,6 +4,58 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.0 — 2026-05-19
+
+### Added
+
+**`runspec init --example`** generates a full working runnable instead of a
+minimal skeleton. The scaffold is a stale temp-file cleaner that demonstrates
+all five runspec arg types (`path`, `str`, `int`, `choice`, `flag`) and
+`autonomy = "confirm"`. The generated Python stub works immediately after
+`pip install -e .` — no editing required to run it:
+
+```bash
+runspec init --example
+touch -t 202401010000 report.tmp cache.tmp   # stage some old files
+pip install -e .
+clean                                         # dry run — lists matches
+clean --format json                           # agent-ready output
+clean --delete                                # autonomy kicks in
+```
+
+**`runspec init --write-project`** scaffolds the full Python project alongside
+the runspec files. Writes `pyproject.toml` and `__init__.py` one level up from
+the current directory (the right place when you are inside your package
+directory), so `pip install -e .` works immediately with no manual wiring:
+
+```bash
+mkdir myproject && mkdir myproject/mypkg && cd myproject/mypkg
+runspec init --write-project
+cd ..
+pip install -e .
+runspec local   # discovers mypkg immediately
+```
+
+Supply an explicit path to place `pyproject.toml` elsewhere:
+
+```bash
+runspec init --write-project /path/to/project
+```
+
+If a `pyproject.toml` already exists at the target, the file is left untouched
+and the `[project.scripts]` entry to add is printed instead.
+
+Both flags compose freely:
+
+```bash
+runspec init --example --write-project   # full demo + full project scaffold
+```
+
+**Install reminder** is now printed on every `runspec init` run, along with the
+exact `[project.scripts]` entry needed to wire the runnable into pip.
+
+---
+
 ## 0.7.0 — 2026-05-18
 
 ### Changed
