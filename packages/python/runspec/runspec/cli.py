@@ -908,12 +908,52 @@ Commands:
   serve       Start the MCP stdio server for this environment
   jump        List or run tools on a jump box via SSH
 
-Run 'runspec <command> --help' for options specific to each command.
+Options for init:
+  --name           Runnable name (default: current directory name, or 'clean' with --example)
+  --lang           Language for code stub: python (default), typescript, javascript
+  --example        Generate two working runnables: clean (confirm) and scan (autonomous)
+  --write-project  Generate pyproject.toml and __init__.py one level up (inside your package dir).
+                   Supply an explicit path to override: --write-project /path/to/project
+
+Options for local:
+  --format    Output format: text (default), json, mcp, openai, anthropic
+  --script    Target a single runnable by name (use with --format)
+
+Options for serve:
+  --dev            Development mode: scan under the nearest .git root
+  --registry       Registry base URL (overrides [config] registry)
+  --name           Instance name reported to registry
+  --registry-key   API key for registry write endpoints
+  --registry-cert  CA certificate bundle path for HTTPS registry
+
+Options for jump:
+  <tool>               Tool name (omit to list available tools from registry)
+  --host <host>        Jump box to run on
+  --registry <url>     Registry base URL
+  --registry-key <k>   API key for registry read endpoints
+  --registry-cert <f>  CA certificate bundle for HTTPS registry
+  --user <user>        SSH username
+  --ssh-key <file>     Path to SSH private key
+  --no-host-key-check  Skip SSH host key verification (insecure)
+  --format             text (default) or json — listing mode only
+  --                   Separator: everything after is passed to the tool
 
 Examples:
+  runspec init
+  runspec init --example
   runspec init --example --write-project
-  runspec local
-  runspec local --format mcp
+  runspec init --name myapp --lang typescript
+  runspec init --write-project /path/to/project
+  runspec local                                  # discover runnables + validate
+  runspec local --format mcp                     # emit MCP tool schemas
+  runspec local --format mcp --script deploy     # emit schema for one runnable
   runspec serve
+  runspec serve --dev
+  runspec serve --registry http://registry:8080
+  runspec jump                                   # list tools from registry
+  runspec jump --registry http://registry:8080
   runspec jump deploy --host jumpbox-01 -- --env prod
+  runspec jump deploy --host jumpbox-01 --user deploy --ssh-key ~/.ssh/id_deploy -- --env prod
+
+Run 'runspec <command> --help' for focused help on a specific command.
 """)
