@@ -210,6 +210,8 @@ def cmd_init(args: list[str]) -> None:
         project_root = (cwd / (project_root_arg or "..")).resolve()
         _init_package_init(cwd)
         _init_pyproject(project_root, runnable_name, pkg_name, example=example)
+        _init_gitignore(project_root)
+        _init_claude_md(project_root, pkg_name)
         _print_next_steps(install_from=project_root_arg, example=example)
     else:
         if example:
@@ -422,6 +424,50 @@ def _init_package_init(directory: Path) -> None:
         print("  ✓  Created __init__.py")
 
 
+def _init_gitignore(project_root: Path) -> None:
+    path = project_root / ".gitignore"
+    if path.exists():
+        print("  ℹ  .gitignore already exists — skipped")
+        return
+    path.write_text(
+        "# Python\n__pycache__/\n*.py[cod]\n*.egg-info/\n*.egg\ndist/\nbuild/\n.venv/\nvenv/\n.env\n.env.*\n\n# Editor\n.vscode/\n.idea/\n*.swp\n*.swo\n*~\n\n# OS\n.DS_Store\nThumbs.db\n",
+        encoding="utf-8",
+    )
+    print("  ✓  Created .gitignore")
+
+
+def _init_claude_md(project_root: Path, pkg_name: str) -> None:
+    path = project_root / "CLAUDE.md"
+    if path.exists():
+        print("  ℹ  CLAUDE.md already exists — skipped")
+        return
+    path.write_text(
+        "# AI Context\n"
+        "\n"
+        "This project uses [runspec](https://github.com/JasonFinestone/runspec) for CLI interfaces.\n"
+        "\n"
+        "## Key files\n"
+        f"- `{pkg_name}/runspec.toml` — defines runnables: args, types, autonomy levels\n"
+        f"- `{pkg_name}/<name>.py` — one module per runnable, each with a `main()` entry point\n"
+        "- `pyproject.toml` — wires entry points under `[project.scripts]`\n"
+        "\n"
+        "## Adding a runnable\n"
+        f"1. Add `[name]` section to `{pkg_name}/runspec.toml` with args and autonomy\n"
+        f"2. Create `{pkg_name}/name.py` with `main()` calling `runspec.parse()`\n"
+        '3. Add `name = "{pkg}.name:main"` to `[project.scripts]` in `pyproject.toml`\n'
+        "4. Run `pip install -e .` then `runspec local` to validate\n"
+        "\n"
+        "## Autonomy levels\n"
+        "| Level | Use for |\n"
+        "|---|---|\n"
+        "| `confirm` | Destructive operations — agent confirms with human before running |\n"
+        "| `autonomous` | Read-only operations — agent runs freely |\n"
+        "| `supervised` | Agent runs, human reviews output before it is acted on |\n",
+        encoding="utf-8",
+    )
+    print("  ✓  Created CLAUDE.md")
+
+
 def _init_pyproject(project_root: Path, runnable_name: str, pkg_name: str, example: bool = False) -> None:
     pyproject = project_root / "pyproject.toml"
 
@@ -455,8 +501,8 @@ def _build_pyproject(runnable_name: str, pkg_name: str, example: bool = False) -
         f"{scripts}"
         f"\n"
         f"[build-system]\n"
-        f'requires      = ["setuptools>=69.0.2", "wheel"]\n'
-        f'build-backend = "setuptools.build_meta"\n'
+        f'requires      = ["hatchling"]\n'
+        f'build-backend = "hatchling.build"\n'
     )
 
 

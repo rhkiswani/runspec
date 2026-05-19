@@ -374,9 +374,8 @@ def test_write_project_pyproject_content(tmp_path, monkeypatch):
     assert 'name            = "greet"' in content
     assert 'dependencies    = ["runspec"]' in content
     assert 'greet = "mypkg.greet:main"' in content
-    assert 'build-backend = "setuptools.build_meta"' in content
-    assert "setuptools>=69" in content
-    assert "setuptools.backends.legacy" not in content
+    assert 'build-backend = "hatchling.build"' in content
+    assert 'requires      = ["hatchling"]' in content
 
 
 def test_write_project_pyproject_is_valid_toml(tmp_path, monkeypatch):
@@ -395,7 +394,7 @@ def test_write_project_pyproject_is_valid_toml(tmp_path, monkeypatch):
         parsed = tomllib.load(f)
     assert parsed["project"]["name"] == "greet"
     assert parsed["project"]["scripts"]["greet"] == "mypkg.greet:main"
-    assert parsed["build-system"]["build-backend"] == "setuptools.build_meta"
+    assert parsed["build-system"]["build-backend"] == "hatchling.build"
 
 
 def test_write_project_skips_existing_pyproject(tmp_path, monkeypatch, capsys):
@@ -440,6 +439,66 @@ def test_write_project_skips_existing_init_py(tmp_path, monkeypatch, capsys):
 
     assert existing.read_text() == "# existing\n"
     assert "already exists" in capsys.readouterr().out
+
+
+def test_write_project_creates_gitignore(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    assert (tmp_path / ".gitignore").exists()
+
+
+def test_write_project_gitignore_content(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    content = (tmp_path / ".gitignore").read_text()
+    assert "*.egg-info/" in content
+    assert "__pycache__/" in content
+    assert ".venv/" in content
+    assert ".DS_Store" in content
+
+
+def test_write_project_skips_existing_gitignore(tmp_path, monkeypatch, capsys):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    (tmp_path / ".gitignore").write_text("# existing\n", encoding="utf-8")
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    assert (tmp_path / ".gitignore").read_text() == "# existing\n"
+    assert ".gitignore already exists" in capsys.readouterr().out
+
+
+def test_write_project_creates_claude_md(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    assert (tmp_path / "CLAUDE.md").exists()
+
+
+def test_write_project_claude_md_content(tmp_path, monkeypatch):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "runspec" in content
+    assert "runspec.toml" in content
+    assert "mypkg" in content
+    assert "autonomy" in content
+
+
+def test_write_project_skips_existing_claude_md(tmp_path, monkeypatch, capsys):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    (tmp_path / "CLAUDE.md").write_text("# existing\n", encoding="utf-8")
+    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    assert (tmp_path / "CLAUDE.md").read_text() == "# existing\n"
+    assert "CLAUDE.md already exists" in capsys.readouterr().out
 
 
 def test_write_project_install_path_in_next_steps(tmp_path, monkeypatch, capsys):
