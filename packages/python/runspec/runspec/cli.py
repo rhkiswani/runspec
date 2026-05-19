@@ -251,7 +251,7 @@ def main():
     args = parse()
 
     cutoff = time.time() - args.older_than * 86400
-    matches = [p for p in args.directory.glob(args.pattern) if p.is_file() and p.stat().st_mtime < cutoff]
+    matches = [p for p in args.directory.glob(str(args.pattern)) if p.is_file() and p.stat().st_mtime < cutoff]
 
     if not matches:
         print(f"No '{args.pattern}' files older than {args.older_than} days found in {args.directory}.")
