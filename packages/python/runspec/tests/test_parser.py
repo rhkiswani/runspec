@@ -12,7 +12,6 @@ import pytest
 import runspec
 from runspec.parser import _parse_argv
 
-
 # ── parse() error handling ────────────────────────────────────────────────────
 
 

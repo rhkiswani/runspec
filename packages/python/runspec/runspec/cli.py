@@ -196,7 +196,7 @@ def cmd_init(args: list[str]) -> None:
     _init_code_stub(cwd, runnable_name, lang_flag, example=example)
 
     if write_project:
-        project_root = (cwd / project_root_arg).resolve()
+        project_root = (cwd / (project_root_arg or "..")).resolve()
         _init_package_init(cwd)
         _init_pyproject(project_root, runnable_name, pkg_name)
         _print_next_steps(install_from=project_root_arg)
@@ -292,7 +292,13 @@ if __name__ == "__main__":
 _CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
     "python": (
         ".py",
-        'import sys\n\nfrom runspec import parse\n\n\ndef main():\n    try:\n        args = parse()\n    except Exception as e:\n        print(str(e))\n        sys.exit(1)\n    # your logic here\n\n\nif __name__ == "__main__":\n    main()\n',
+        (
+            "import sys\n\nfrom runspec import parse\n\n\n"
+            "def main():\n"
+            "    try:\n        args = parse()\n    except Exception as e:\n        print(str(e))\n        sys.exit(1)\n"
+            "    # your logic here\n\n\n"
+            'if __name__ == "__main__":\n    main()\n'
+        ),
     ),
     "typescript": (
         ".ts",

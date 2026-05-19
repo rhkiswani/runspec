@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 @dataclass
@@ -136,7 +136,7 @@ class Arg:
         return self.value % other
 
     def __fspath__(self) -> str:
-        return os.fspath(self.value)
+        return cast(str, os.fspath(self.value))
 
     def __hash__(self) -> int:
         return hash(self.value)
