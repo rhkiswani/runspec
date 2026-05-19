@@ -191,13 +191,14 @@ def test_example_defaults_to_clean_runnable(tmp_path, monkeypatch):
     assert (tmp_path / "clean.py").exists()
 
 
-def test_example_with_custom_name(tmp_path, monkeypatch):
+def test_example_with_custom_name_ignores_name(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     cmd_init(["--example", "--name", "sweep"])
 
     toml = tmp_path / "runspec.toml"
-    assert "[sweep]" in toml.read_text()
-    assert (tmp_path / "sweep.py").exists()
+    assert "[clean]" in toml.read_text()
+    assert "[scan]" in toml.read_text()
+    assert "--name ignored" in capsys.readouterr().out
 
 
 def test_example_toml_has_all_arg_types(tmp_path, monkeypatch):
@@ -252,6 +253,77 @@ def test_example_install_message_shown(tmp_path, monkeypatch, capsys):
     assert "pip install -e ." in out
     assert "uv sync" in out
     assert "poetry install" in out
+
+
+# ── --example dual runnable (clean + scan) ────────────────────────────────────
+
+
+def test_example_creates_scan_stub(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    assert (tmp_path / "scan.py").exists()
+
+
+def test_example_scan_stub_syntax(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    import ast
+
+    ast.parse((tmp_path / "scan.py").read_text())
+
+
+def test_example_scan_stub_uses_parse(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    content = (tmp_path / "scan.py").read_text()
+    assert "from runspec import parse" in content
+    assert "args = parse()" in content
+    assert "args.directory.glob" in content
+
+
+def test_example_toml_has_scan_runnable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    from runspec.loader import load_raw
+
+    raw = load_raw(tmp_path / "runspec.toml")
+    assert "scan" in raw["runnables"]
+    scan = raw["runnables"]["scan"]
+    assert scan.get("autonomy") == "autonomous"
+    assert scan.get("output") == "json"
+
+
+def test_example_toml_scan_has_no_delete_arg(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    from runspec.loader import load_raw
+
+    raw = load_raw(tmp_path / "runspec.toml")
+    assert "delete" not in raw["runnables"]["scan"].get("args", {})
+
+
+def test_example_next_steps_shows_demo_prep(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+    out = capsys.readouterr().out
+    assert "touch -t 202401010000 report.tmp cache.tmp session.tmp" in out
+    assert "scan" in out
+    assert "clean --delete" in out
+
+
+def test_example_pyproject_snippet_includes_both_entry_points(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+    out = capsys.readouterr().out
+    assert "clean" in out
+    assert "scan" in out
+    assert ".clean:main" in out
+    assert ".scan:main" in out
 
 
 # ── _get_optional_flag ────────────────────────────────────────────────────────
@@ -350,9 +422,11 @@ def test_write_project_with_example(tmp_path, monkeypatch):
 
     assert (tmp_path / "pyproject.toml").exists()
     assert (pkg / "clean.py").exists()
+    assert (pkg / "scan.py").exists()
     assert (pkg / "__init__.py").exists()
     content = (tmp_path / "pyproject.toml").read_text()
     assert 'clean = "mypkg.clean:main"' in content
+    assert 'scan  = "mypkg.scan:main"' in content
 
 
 def test_write_project_skips_existing_init_py(tmp_path, monkeypatch, capsys):

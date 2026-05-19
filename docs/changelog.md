@@ -4,6 +4,48 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.7 — 2026-05-19
+
+### Changed
+
+**`runspec init --example` now scaffolds two runnables: `clean` and `scan`.**
+A single `runspec.toml` demonstrates both an autonomous read-only tool and a
+confirm-gated destructive tool — the minimal dual-entrypoint pattern.
+
+`clean` — finds and optionally deletes stale temp files (`autonomy = "confirm"`).
+`scan`  — read-only scan, reports what `clean` would delete (`autonomy = "autonomous"`, `output = "json"`).
+
+Both stubs are created (`clean.py`, `scan.py`) and both entry points are wired
+when `--write-project` is used. The `--name` flag is silently ignored when
+`--example` is active; names are always `clean` and `scan`.
+
+**Demo prep commands** are printed after every `--example` init:
+
+```
+Demo (stage some stale files first):
+  touch -t 202401010000 report.tmp cache.tmp session.tmp
+
+  scan                    # read-only — lists stale files
+  scan --format json      # agent-ready output
+  clean --delete          # destructive — triggers confirmation
+```
+
+---
+
+## 0.8.6 — 2026-05-19
+
+### Fixed
+
+**mypy strict compliance** — three type errors resolved:
+
+- `__fspath__` return type: `os.fspath(Any)` returns `Any`; added `cast(str, ...)`
+  so the declared `str` return type is satisfied.
+- `project_root_arg` null guard: `Path / None` is unsupported; replaced with
+  `project_root_arg or ".."`.
+- E501 line-length: minimal Python stub template split to stay under 200 chars.
+
+---
+
 ## 0.8.5 — 2026-05-19
 
 ### Fixed

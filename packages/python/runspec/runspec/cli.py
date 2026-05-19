@@ -189,8 +189,14 @@ def cmd_init(args: list[str]) -> None:
 
     cwd = Path.cwd()
     pkg_name = _sanitize_name(cwd.name)
-    runnable_name = name_flag or ("clean" if example else pkg_name)
     runspec_toml = cwd / "runspec.toml"
+
+    if example:
+        if name_flag:
+            print("  ℹ  --name ignored with --example (fixed names: clean, scan)")
+        runnable_name = "clean"
+    else:
+        runnable_name = name_flag or pkg_name
 
     _init_runspec_toml(runspec_toml, runnable_name, example=example)
     _init_code_stub(cwd, runnable_name, lang_flag, example=example)
@@ -198,11 +204,14 @@ def cmd_init(args: list[str]) -> None:
     if write_project:
         project_root = (cwd / (project_root_arg or "..")).resolve()
         _init_package_init(cwd)
-        _init_pyproject(project_root, runnable_name, pkg_name)
-        _print_next_steps(install_from=project_root_arg)
+        _init_pyproject(project_root, runnable_name, pkg_name, example=example)
+        _print_next_steps(install_from=project_root_arg, example=example)
     else:
-        _print_pyproject_snippet(runnable_name, pkg_name)
-        _print_next_steps(install_from=None)
+        if example:
+            _print_pyproject_snippet_example(pkg_name)
+        else:
+            _print_pyproject_snippet(runnable_name, pkg_name)
+        _print_next_steps(install_from=None, example=example)
 
 
 def _sanitize_name(raw: str) -> str:
@@ -220,26 +229,40 @@ def _init_runspec_toml(path: Path, name: str, example: bool = False) -> None:
         sys.exit(1)
 
     content = (
-        _build_example_toml(name)
+        _build_example_toml()
         if example
         else (f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n')
     )
     _write_and_verify(path, content, None)
-    print(f"  ✓  Created runspec.toml with [{name}] runnable")
+    if example:
+        print("  ✓  Created runspec.toml with [clean] and [scan] runnables")
+    else:
+        print(f"  ✓  Created runspec.toml with [{name}] runnable")
 
 
-def _build_example_toml(name: str) -> str:
+def _build_example_toml() -> str:
     return (
-        f"[{name}]\n"
-        f'description = "Find and optionally delete stale temporary files in a directory"\n'
-        f'autonomy    = "confirm"\n'
-        f"\n"
-        f"[{name}.args]\n"
-        f'directory  = {{type = "path",   description = "Directory to scan",                            default = "."}}\n'
-        f'pattern    = {{type = "str",    description = "Glob pattern to match",                        default = "*.tmp"}}\n'
-        f'older_than = {{type = "int",    description = "Only match files older than N days",           default = 7}}\n'
-        f'format     = {{type = "choice", description = "Output format", options = ["text", "json"],    default = "text"}}\n'
-        f'delete     = {{type = "flag",   description = "Delete matched files (asks for confirmation)", default = false}}\n'
+        "[clean]\n"
+        'description = "Find and optionally delete stale temporary files in a directory"\n'
+        'autonomy    = "confirm"\n'
+        "\n"
+        "[clean.args]\n"
+        'directory  = {type = "path",   description = "Directory to scan",                            default = "."}\n'
+        'pattern    = {type = "str",    description = "Glob pattern to match",                        default = "*.tmp"}\n'
+        'older_than = {type = "int",    description = "Only match files older than N days",           default = 7}\n'
+        'format     = {type = "choice", description = "Output format", options = ["text", "json"],    default = "text"}\n'
+        'delete     = {type = "flag",   description = "Delete matched files (asks for confirmation)", default = false}\n'
+        "\n"
+        "[scan]\n"
+        'description = "Scan for stale temporary files and report what clean would delete"\n'
+        'autonomy    = "autonomous"\n'
+        'output      = "json"\n'
+        "\n"
+        "[scan.args]\n"
+        'directory  = {type = "path",   description = "Directory to scan",               default = "."}\n'
+        'pattern    = {type = "str",    description = "Glob pattern to match",            default = "*.tmp"}\n'
+        'older_than = {type = "int",    description = "Only match files older than N days", default = 7}\n'
+        'format     = {type = "choice", description = "Output format", options = ["text", "json"], default = "text"}\n'
     )
 
 
@@ -289,6 +312,46 @@ if __name__ == "__main__":
     main()
 """
 
+_SCAN_PYTHON_STUB = """\
+import json
+import sys
+import time
+
+from runspec import parse
+
+
+def main():
+    try:
+        args = parse()
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+    cutoff = time.time() - args.older_than * 86400
+    matches = [p for p in args.directory.glob(args.pattern) if p.is_file() and p.stat().st_mtime < cutoff]
+
+    if not matches:
+        print(f"No '{args.pattern}' files older than {args.older_than} days found in {args.directory}.")
+        return
+
+    if args.format == "json":
+        data = [
+            {"path": str(p), "size": p.stat().st_size, "days_old": int((time.time() - p.stat().st_mtime) / 86400)}
+            for p in matches
+        ]
+        print(json.dumps(data, indent=2))
+    else:
+        print(f"Found {len(matches)} file(s) matching '{args.pattern}' older than {args.older_than} days:")
+        print()
+        for p in matches:
+            days = int((time.time() - p.stat().st_mtime) / 86400)
+            print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
+
+
+if __name__ == "__main__":
+    main()
+"""
+
 _CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
     "python": (
         ".py",
@@ -322,17 +385,21 @@ def _init_code_stub(directory: Path, name: str, lang: str, example: bool = False
         sys.exit(1)
 
     if example:
-        ext, content = ".py", _EXAMPLE_PYTHON_STUB
+        for stub_name, content in [("clean", _EXAMPLE_PYTHON_STUB), ("scan", _SCAN_PYTHON_STUB)]:
+            stub_path = directory / (stub_name + ".py")
+            if stub_path.exists():
+                print(f"  ℹ  {stub_path.name} already exists — skipped")
+            else:
+                stub_path.write_text(content, encoding="utf-8")
+                print(f"  ✓  Created {stub_path.name}")
     else:
         ext, content = _CODE_STUB_TEMPLATES[lang]
-
-    stub_path = directory / (name + ext)
-
-    if stub_path.exists():
-        print(f"  ℹ  {stub_path.name} already exists — skipped")
-    else:
-        stub_path.write_text(content, encoding="utf-8")
-        print(f"  ✓  Created {stub_path.name}")
+        stub_path = directory / (name + ext)
+        if stub_path.exists():
+            print(f"  ℹ  {stub_path.name} already exists — skipped")
+        else:
+            stub_path.write_text(content, encoding="utf-8")
+            print(f"  ✓  Created {stub_path.name}")
 
 
 def _init_package_init(directory: Path) -> None:
@@ -344,21 +411,24 @@ def _init_package_init(directory: Path) -> None:
         print("  ✓  Created __init__.py")
 
 
-def _init_pyproject(project_root: Path, runnable_name: str, pkg_name: str) -> None:
+def _init_pyproject(project_root: Path, runnable_name: str, pkg_name: str, example: bool = False) -> None:
     pyproject = project_root / "pyproject.toml"
-    entry_point = f"{pkg_name}.{runnable_name}:main"
 
     if pyproject.exists():
         print(f"  ℹ  {pyproject} already exists — add this entry manually:")
         print("       [project.scripts]")
-        print(f'       {runnable_name} = "{entry_point}"')
+        if example:
+            print(f'       clean = "{pkg_name}.clean:main"')
+            print(f'       scan  = "{pkg_name}.scan:main"')
+        else:
+            print(f'       {runnable_name} = "{pkg_name}.{runnable_name}:main"')
     else:
-        pyproject.write_text(_build_pyproject(runnable_name, pkg_name), encoding="utf-8")
+        pyproject.write_text(_build_pyproject(runnable_name, pkg_name, example=example), encoding="utf-8")
         print(f"  ✓  Created {pyproject}")
 
 
-def _build_pyproject(runnable_name: str, pkg_name: str) -> str:
-    entry_point = f"{pkg_name}.{runnable_name}:main"
+def _build_pyproject(runnable_name: str, pkg_name: str, example: bool = False) -> str:
+    scripts = f'clean = "{pkg_name}.clean:main"\nscan  = "{pkg_name}.scan:main"\n' if example else f'{runnable_name} = "{pkg_name}.{runnable_name}:main"\n'
     return (
         f"[project]\n"
         f'name            = "{runnable_name}"\n'
@@ -371,7 +441,7 @@ def _build_pyproject(runnable_name: str, pkg_name: str) -> str:
         f'dev = ["pytest", "ruff"]\n'
         f"\n"
         f"[project.scripts]\n"
-        f'{runnable_name} = "{entry_point}"\n'
+        f"{scripts}"
         f"\n"
         f"[build-system]\n"
         f'requires      = ["setuptools>=69.0.2", "wheel"]\n'
@@ -388,7 +458,16 @@ def _print_pyproject_snippet(runnable_name: str, pkg_name: str) -> None:
     print(f'    {runnable_name} = "{entry_point}"')
 
 
-def _print_next_steps(install_from: str | None) -> None:
+def _print_pyproject_snippet_example(pkg_name: str) -> None:
+    print()
+    print("  To register these runnables, add to your pyproject.toml:")
+    print()
+    print("    [project.scripts]")
+    print(f'    clean = "{pkg_name}.clean:main"')
+    print(f'    scan  = "{pkg_name}.scan:main"')
+
+
+def _print_next_steps(install_from: str | None, example: bool = False) -> None:
     print()
     print("  Next steps:")
     if install_from is None:
@@ -404,6 +483,15 @@ def _print_next_steps(install_from: str | None) -> None:
         print(f"         uv sync              # uv — run from {install_from}")
         print(f"         poetry install       # poetry — run from {install_from}")
         print("    2. Run 'runspec local' to validate your setup")
+
+    if example:
+        print()
+        print("  Demo (stage some stale files first):")
+        print("    touch -t 202401010000 report.tmp cache.tmp session.tmp")
+        print()
+        print("    scan                    # read-only — lists stale files")
+        print("    scan --format json      # agent-ready output")
+        print("    clean --delete          # destructive — triggers confirmation")
 
 
 def _write_and_verify(path: Path, content: str, original: str | None) -> None:
