@@ -5,6 +5,10 @@ Arg wraps a resolved value and should behave like that value in expressions —
 no .value unwrapping required by callers.
 """
 
+import sys
+
+import pytest
+
 from runspec.models import Arg
 
 
@@ -171,6 +175,7 @@ class TestPathProtocol:
         a = arg(tmp_path, type="path")
         assert Path(a) == tmp_path
 
+    @pytest.mark.skipif(sys.version_info < (3, 11), reason="Path.glob() requires exact str on Python 3.10 (sys.intern limitation)")
     def test_glob_accepts_str_arg_as_pattern(self, tmp_path):
         (tmp_path / "a.txt").touch()
         (tmp_path / "b.txt").touch()
