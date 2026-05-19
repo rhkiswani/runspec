@@ -6,6 +6,21 @@
 
 ---
 
+## Core Philosophy
+
+Every runspec tool must work as a human CLI first. Agent use is additive, not a replacement.
+
+A developer can always SSH to a known host, run the tool by name, read the help, and understand what it does — without an agent, without a registry, without any infrastructure beyond SSH access and a working venv. This is not a fallback. It is a guarantee.
+
+Every runspec tool is simultaneously:
+- **A CLI** — run directly by a human in a terminal, with help output, clear descriptions, validated args
+- **An MCP tool** — callable by an agent via `runspec serve`, with full schema and autonomy metadata
+- **A remote tool** — accessible over SSH with no extra configuration, using existing auth
+
+The same `runspec.toml`, the same binary, the same argument validation, the same output. The human and the agent use identical interfaces. The agent gets the CLI for free — not the other way around.
+
+---
+
 ## What `runspec` Describes
 
 `runspec` is not just for scripts. It describes the interface of **anything runnable**: a Python script, a shell command, a CLI application, an MCP tool, or a long-lived application that accepts inputs over time. From `runspec`'s perspective these are all the same thing — a runnable with a defined interface of inputs it accepts.
@@ -256,6 +271,50 @@ runspec generate      ← agent writes the implementation (future)
 ```
 
 This makes `runspec.toml` the single source of truth — documentation, validation contract, agent skill definition, form definition, and autonomy policy all in one file, written before a line of implementation exists.
+
+---
+
+## Remote Access Pattern
+
+Because every runspec tool is a standard CLI binary, SSH is a zero-configuration remote transport — no agent-specific infrastructure required.
+
+### SSH as MCP stdio transport
+
+An MCP host (Claude Desktop, VS Code, or a custom client) can connect to a remote `runspec serve` by spawning SSH as the stdio process:
+
+```json
+{
+  "mcpServers": {
+    "prod-tools": {
+      "command": "ssh",
+      "args": ["user@host", "/path/to/venv/bin/runspec serve"]
+    }
+  }
+}
+```
+
+The SSH process becomes the pipe. JSON-RPC messages flow through the SSH tunnel to `runspec serve` on the remote host, identically to a local stdio server. The MCP host has no idea it is remote.
+
+### Why this works cleanly
+
+- **Auth is already solved** — SSH keys and `authorized_keys`, managed by existing tooling (Ansible, etc.)
+- **Tool discovery is automatic** — `runspec serve` on the remote host knows its own tools
+- **No registry needed** — for known, stable hosts the SSH config is the inventory
+- **Named venvs = server identity** — the venv name becomes the MCP server name, enabling multiple distinct tool sets on one machine
+
+### Deployment model
+
+```
+Ansible manages Linux hosts:
+  → installs named venv + runspec + tools
+  → sets env vars (run_as, etc.)
+
+MCP host config mirrors Ansible inventory:
+  → one entry per host: ssh host /venv/bin/runspec serve
+  → config shipped alongside SSH keys to any new client machine
+```
+
+The registry (`runspec-registry`) is still the right solution for **dynamic** environments where hosts spin up and down and tool availability changes at runtime. For known, stable host inventories the SSH pattern is simpler and has no extra moving parts.
 
 ---
 
@@ -825,11 +884,11 @@ Fuzzy matching on typos is implemented via `difflib` from the Python standard li
 
 ## Design Principles
 
-1. **Spec first, code follows** — the runspec is the source of truth
-2. **Describes anything runnable** — scripts, apps, and MCP tools are all the same thing
-3. **The discovery binary is the contract with agents** — `runspec discover` is the universal entry point
-4. **Zero new conventions for developers** — add `runspec` as a dependency, everything else is automatic
-5. **The CLI is the primary product** — emit agent schemas for any project
+1. **CLI first, agent is additive** — every runspec tool works as a human CLI before it is an agent tool; the agent gets the CLI for free, not the other way around
+2. **Spec first, code follows** — the runspec is the source of truth
+3. **Describes anything runnable** — scripts, apps, and MCP tools are all the same thing
+4. **`runspec local` is the contract with agents** — the universal entry point for discovery and schema emission
+5. **Zero new conventions for developers** — add `runspec` as a dependency, everything else is automatic
 6. **Zero dependencies** for core — language packs are optional installs
 7. **One line for simple args, full block only when needed**
 8. **Inference over declaration** — don't make users repeat themselves
@@ -842,19 +901,22 @@ Fuzzy matching on typos is implemented via `difflib` from the Python standard li
 15. **Extensible type registry** — custom types are first-class, not hacks
 16. **Errors that help** — what failed, what was expected, what to try instead
 17. **Language agnostic** — the format works for Python, shell, Node, or anything
+18. **SSH is a valid transport** — for known hosts, `ssh host runspec serve` is a complete remote MCP deployment with no extra infrastructure
 
 ---
 
 ## Open Questions
 
-- [ ] Which agent schema formats to support at launch: MCP + OpenAI + Anthropic, or MCP only?
+- [x] Which agent schema formats to support at launch: MCP + OpenAI + Anthropic — all three shipped
+- [x] Subcommand structure — `commands` key on a script section, settled and implemented
+- [x] Should `autonomy = "confirm"` be the default — yes, safe by default, opt-in to trust
+- [x] Should language packs return rich metadata objects — yes, Python's `Arg` dataclass is the model; Node mirrors it
 - [ ] Should `runspec generate` use templates per language or be fully AI-driven?
 - [ ] What signals determine which packaged example best matches a given spec?
 - [ ] How should runtime detection handle version constraints (e.g. python3.11+ required)?
 - [ ] Should generated code be written to disk automatically or previewed first?
 - [ ] How do `ui` hints interact with MCP's evolving form specification — track MCP's spec or define our own and map to it?
 - [ ] Should custom type registration be per-project (in `runspec.toml`) or code-only (via `runspec.register_type()`)?
-- [ ] How does `runspec check` validate custom types — against registered types at check time, or against a declared list in the spec?
 
 ---
 
@@ -1083,20 +1145,25 @@ This is the version of `runspec` that makes the tool genuinely transformative ra
 
 ---
 
-## Open Questions
+## Open Questions (future `runspec generate`)
 
-- [ ] Subcommand structure — nested script sections or a `commands` key?
-- [ ] Which agent schema formats to support at launch: MCP + OpenAI + Anthropic, or MCP only?
 - [ ] Should `runspec generate` use templates per language or be fully AI-driven?
 - [ ] What signals determine which packaged example best matches a given spec?
 - [ ] How should runtime detection handle version constraints (e.g. python3.11+ required)?
 - [ ] Should generated code be written to disk automatically or previewed first?
-- [ ] How do `ui` hints interact with MCP's evolving form specification — should we track MCP's spec or define our own and map to it?
-- [ ] Should `autonomy = "confirm"` be the default when no autonomy is declared, or should unspecified mean `autonomous`?
-- [ ] Should language packs be required to return rich metadata objects (like Python's `Arg` dataclass, which carries value + full spec metadata) or just correctly typed values? Python's `args.times.default`, `args.format.options` etc. are powerful but may be hard to replicate idiomatically in Go or Node. Decision needed before the spec locks down the language pack contract.
+- [ ] How do `ui` hints interact with MCP's evolving form specification — track MCP's spec or define our own and map to it?
+- [ ] Should custom type registration be per-project (in `runspec.toml`) or code-only (via `runspec.register_type()`)?
 
 ---
 
 ## Project Status
 
-Early design phase. Core ideas and strategy are settled. Build order defined. Implementation not started.
+Active development. Core design settled and implemented across Python and Node.
+
+| Package | Version | Status |
+|---|---|---|
+| `runspec` (PyPI) | 0.8.8 | Stable — full CLI, MCP serve, SSH transport |
+| `runspec-node` (npm) | 0.7.0 | Stable — CLI parity with Python |
+| `runspec-registry` (PyPI) | 0.1.1 | Available — for dynamic host environments |
+
+**Next:** Chainlit app — LangChain + `langchain-mcp-adapters` + SSH-as-stdio transport, connecting to known Ansible-managed hosts without a registry.
