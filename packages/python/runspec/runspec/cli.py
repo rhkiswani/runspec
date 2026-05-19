@@ -29,7 +29,7 @@ def main() -> None:
 
     pre_sep = rest[: rest.index("--")] if "--" in rest else rest
     if "-h" in pre_sep or "--help" in pre_sep:
-        _print_help()
+        _print_command_help(command)
         return
 
     commands = {
@@ -807,30 +807,70 @@ def _get_optional_flag(args: list[str], flag: str, default: str | None = None) -
     return True, default
 
 
-def _print_help() -> None:
-    print("""runspec — interface specification for anything runnable
+def _print_command_help(command: str) -> None:
+    help_text = {
+        "init": """\
+runspec init — scaffold a new runnable (config and code stub)
 
 Usage:
-  runspec <command> [options]
+  runspec init [options]
 
-Commands:
-  init        Scaffold a new runnable — config and code stub
-  local       Discover and validate runnables in this environment
-  serve       Start the MCP stdio server for this environment
-  jump        List or run tools on a jump box via SSH
+Options:
+  --name           Runnable name (default: current directory name, or 'clean' with --example)
+  --lang           Language for code stub: python (default), typescript, javascript
+  --example        Generate two working runnables: clean (confirm) and scan (autonomous)
+  --write-project  Generate pyproject.toml and __init__.py one level up (inside your package dir).
+                   Supply an explicit path to override: --write-project /path/to/project
 
-Options for local:
+Examples:
+  runspec init
+  runspec init --name deploy
+  runspec init --example
+  runspec init --example --write-project
+  runspec init --name myapp --lang typescript
+  runspec init --write-project /path/to/project
+""",
+        "local": """\
+runspec local — discover and validate runnables in this environment
+
+Usage:
+  runspec local [options]
+
+Options:
   --format    Output format: text (default), json, mcp, openai, anthropic
-  --script    Runnable name to target (use with --format for single-runnable schemas)
+  --script    Target a single runnable by name (use with --format)
 
-Options for serve:
-  --dev            Development mode: aggregate runnables under the nearest .git root
+Examples:
+  runspec local                                  # discover runnables + validate
+  runspec local --format mcp                     # emit MCP tool schemas
+  runspec local --format mcp --script deploy     # emit schema for one runnable
+  runspec local --format json                    # full spec as JSON
+""",
+        "serve": """\
+runspec serve — start the MCP stdio server for this environment
+
+Usage:
+  runspec serve [options]
+
+Options:
+  --dev            Development mode: scan under the nearest .git root
   --registry       Registry base URL (overrides [config] registry)
-  --name           Instance name reported to registry (overrides [config] name)
+  --name           Instance name reported to registry
   --registry-key   API key for registry write endpoints
   --registry-cert  CA certificate bundle path for HTTPS registry
 
-Options for jump:
+Examples:
+  runspec serve
+  runspec serve --dev
+  runspec serve --registry http://registry:8080
+""",
+        "jump": """\
+runspec jump — list or run tools on a jump box via SSH
+
+Usage:
+  runspec jump [<tool> --host <host>] [options] [-- tool-args...]
+
+Options:
   <tool>               Tool name (omit to list available tools from registry)
   --host <host>        Jump box to run on
   --registry <url>     Registry base URL
@@ -842,28 +882,38 @@ Options for jump:
   --format             text (default) or json — listing mode only
   --                   Separator: everything after is passed to the tool
 
-Options for init:
-  --name           Runnable name (default: current directory name, or 'clean' with --example)
-  --lang           Language for code stub: python (default), typescript, javascript
-  --example        Generate a full working example (stale temp file cleaner)
-  --write-project  Generate pyproject.toml, __init__.py, and print entry point wiring.
-                   Writes one level up by default (you are inside your package directory).
-                   Supply an explicit path to override: --write-project /path/to/project
-
 Examples:
-  runspec local                                  # discover runnables + validate
-  runspec local --format mcp                     # emit MCP tool schemas
-  runspec local --format mcp --script deploy     # emit schema for one runnable
-  runspec jump                                   # list tools from registry
-  runspec jump --registry http://registry:8080   # list from explicit registry
+  runspec jump                                                         # list tools
+  runspec jump --registry http://registry:8080                        # list from registry
   runspec jump deploy --host jumpbox-01 -- --env prod
   runspec jump deploy --host jumpbox-01 --user deploy --ssh-key ~/.ssh/id_deploy -- --env prod
-  runspec init
-  runspec init --example
+""",
+    }
+    if command in help_text:
+        print(help_text[command])
+    else:
+        _print_help()
+
+
+def _print_help() -> None:
+    print("""\
+runspec — interface specification for anything runnable
+
+Usage:
+  runspec <command> [options]
+
+Commands:
+  init        Scaffold a new runnable — config and code stub
+  local       Discover and validate runnables in this environment
+  serve       Start the MCP stdio server for this environment
+  jump        List or run tools on a jump box via SSH
+
+Run 'runspec <command> --help' for options specific to each command.
+
+Examples:
   runspec init --example --write-project
-  runspec init --name myapp --lang typescript
-  runspec init --write-project /path/to/project
+  runspec local
+  runspec local --format mcp
   runspec serve
-  runspec serve --registry http://registry:8080
-  runspec serve --dev
+  runspec jump deploy --host jumpbox-01 -- --env prod
 """)
