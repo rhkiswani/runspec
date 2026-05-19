@@ -269,7 +269,7 @@ def _build_example_toml() -> str:
         'directory  = {type = "path",   description = "Directory to scan",               default = "."}\n'
         'pattern    = {type = "str",    description = "Glob pattern to match",            default = "*.tmp"}\n'
         'older_than = {type = "int",    description = "Only match files older than N days", default = 7}\n'
-        'format     = {type = "choice", description = "Output format", options = ["text", "json"], default = "text"}\n'
+        'format     = {type = "choice", description = "Output format", options = ["text", "json"], default = "json"}\n'
     )
 
 
