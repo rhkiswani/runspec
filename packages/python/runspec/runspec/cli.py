@@ -60,15 +60,18 @@ def cmd_local(args: list[str]) -> None:
 
     if fmt == "text":
         _print_local_text(discovered)
-    elif fmt == "json":
-        print(json.dumps(discovered, indent=2, default=str))
-    elif fmt in ("mcp", "openai", "anthropic"):
-        schema = _emit_all(discovered, fmt)
-        print(json.dumps(schema, indent=2, default=str))
     else:
-        print(f"✗  Unknown format: {fmt}")
-        print("   Available formats: text, json, mcp, openai, anthropic")
-        sys.exit(1)
+        bin_dir = Path(sys.executable).parent
+        callable_only = [d for d in discovered if (bin_dir / d["runnable"]).exists()]
+        if fmt == "json":
+            print(json.dumps(callable_only, indent=2, default=str))
+        elif fmt in ("mcp", "openai", "anthropic"):
+            schema = _emit_all(callable_only, fmt)
+            print(json.dumps(schema, indent=2, default=str))
+        else:
+            print(f"✗  Unknown format: {fmt}")
+            print("   Available formats: text, json, mcp, openai, anthropic")
+            sys.exit(1)
 
 
 def cmd_serve(args: list[str]) -> None:

@@ -4,6 +4,19 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.5 — 2026-05-19
+
+### Fixed
+
+**`runspec local --format mcp/json/openai/anthropic` excludes non-callable
+runnables.** A runnable without a registered entry point was previously
+included in schema output, which would cause agents to try to invoke a
+command that doesn't exist. Format outputs now silently filter to callable
+runnables only. The text listing still shows all runnables with the
+`[not callable]` warning.
+
+---
+
 ## 0.8.4 — 2026-05-19
 
 ### Changed
