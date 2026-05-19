@@ -282,11 +282,7 @@ from runspec import parse
 
 
 def main():
-    try:
-        args = parse()
-    except Exception as e:
-        print(str(e))
-        sys.exit(1)
+    args = parse()
 
     cutoff = time.time() - args.older_than * 86400
     matches = [p for p in args.directory.glob(args.pattern) if p.is_file() and p.stat().st_mtime < cutoff]
@@ -334,11 +330,7 @@ from runspec import parse
 
 
 def main():
-    try:
-        args = parse()
-    except Exception as e:
-        print(str(e))
-        sys.exit(1)
+    args = parse()
 
     cutoff = time.time() - args.older_than * 86400
     matches = [p for p in args.directory.glob(args.pattern) if p.is_file() and p.stat().st_mtime < cutoff]
@@ -368,13 +360,7 @@ if __name__ == "__main__":
 _CODE_STUB_TEMPLATES: dict[str, tuple[str, str]] = {
     "python": (
         ".py",
-        (
-            "import sys\n\nfrom runspec import parse\n\n\n"
-            "def main():\n"
-            "    try:\n        args = parse()\n    except Exception as e:\n        print(str(e))\n        sys.exit(1)\n"
-            "    # your logic here\n\n\n"
-            'if __name__ == "__main__":\n    main()\n'
-        ),
+        'from runspec import parse\n\n\ndef main():\n    args = parse()\n    # your logic here\n\n\nif __name__ == "__main__":\n    main()\n',
     ),
     "typescript": (
         ".ts",
