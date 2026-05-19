@@ -27,6 +27,10 @@ def main() -> None:
     command = args[0]
     rest = args[1:]
 
+    if "-h" in rest or "--help" in rest:
+        _print_help()
+        return
+
     commands = {
         "init": cmd_init,
         "local": cmd_local,
