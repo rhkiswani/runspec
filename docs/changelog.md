@@ -4,6 +4,26 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.1 — 2026-05-19
+
+### Fixed
+
+**`Arg` proxy completeness** — three missing dunder methods that caused
+silent failures or ugly exceptions:
+
+- `__fspath__` — `Arg` now satisfies `os.PathLike`. Passing a path-type
+  arg directly to `Path.glob()`, `open()`, or any function that calls
+  `os.fspath()` works without wrapping in `str()`. Fixes a `TypeError`
+  introduced by a Python 3.13 change to `Path.glob()`. Non-path args
+  raise a clean `TypeError` from `os.fspath` rather than a traceback.
+- `__hash__` — `Arg` can now be used in sets and as dict keys. Previously,
+  defining `__eq__` without `__hash__` caused Python to silently set
+  `__hash__ = None`, making any `Arg` unhashable.
+- `__getitem__` — index and slice access works on `multiple=true` list
+  args: `args.files[0]`, `args.files[1:3]`.
+
+---
+
 ## 0.8.0 — 2026-05-19
 
 ### Added
