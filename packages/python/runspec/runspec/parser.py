@@ -246,9 +246,10 @@ def _parse_argv(
                 result[norm] = _append_or_set(result.get(norm), parsed, spec)
                 i += 2
             else:
-                # Flag-style bool
-                result[norm] = True
-                i += 1
+                options = spec.get("options")
+                hint = f" Expected one of: {', '.join(str(o) for o in options)}" if options else ""
+                print(f"✗  --{norm.replace('_', '-')} requires a value.{hint}")
+                sys.exit(1)
             continue
 
         i += 1

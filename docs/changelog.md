@@ -4,6 +4,21 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.2 — 2026-05-19
+
+### Fixed
+
+**Missing value for non-flag argument now exits cleanly.** Running
+`clean --format` (or any `--arg` that expects a value but gets none)
+previously produced an ugly traceback as the parser passed `True` to
+the coercer. It now prints a clean message and exits 1:
+
+```
+✗  --format requires a value. Expected one of: text, json
+```
+
+---
+
 ## 0.8.1 — 2026-05-19
 
 ### Fixed
