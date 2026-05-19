@@ -299,6 +299,13 @@ def _mcp_loop(
     exec_specs: dict[str, dict[str, Any]],
     server_name: str,
 ) -> None:
+    if sys.stdin.isatty():
+        print("runspec serve is an MCP stdio server — it is not run directly from a terminal.")
+        print("Configure it as an MCP server in your host (Claude Desktop, VS Code, etc.)")
+        print()
+        print("To test manually:")
+        print('  echo \'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}\' | runspec serve')
+        return
     try:
         for raw_line in sys.stdin:
             line = raw_line.strip()
