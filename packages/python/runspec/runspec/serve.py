@@ -299,19 +299,22 @@ def _mcp_loop(
     exec_specs: dict[str, dict[str, Any]],
     server_name: str,
 ) -> None:
-    for raw_line in sys.stdin:
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            request = json.loads(line)
-        except json.JSONDecodeError:
-            _write({"jsonrpc": "2.0", "id": None, "error": {"code": _ERR_PARSE, "message": "Parse error"}})
-            continue
+    try:
+        for raw_line in sys.stdin:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+            except json.JSONDecodeError:
+                _write({"jsonrpc": "2.0", "id": None, "error": {"code": _ERR_PARSE, "message": "Parse error"}})
+                continue
 
-        response = _dispatch(request, tools, arg_specs, exec_specs, server_name)
-        if response is not None:
-            _write(response)
+            response = _dispatch(request, tools, arg_specs, exec_specs, server_name)
+            if response is not None:
+                _write(response)
+    except KeyboardInterrupt:
+        pass
 
 
 def _dispatch(

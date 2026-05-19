@@ -8,11 +8,13 @@ Public API:
     register_type() → None      Register a custom type coercer
 """
 
+from importlib.metadata import version as _version
+
 from runspec.models import Arg, Group, RunSpec
 from runspec.parser import load_spec, parse
 from runspec.types import register_type
 
-__version__ = "0.4.0"
+__version__ = _version("runspec")
 __all__ = [
     "parse",
     "load_spec",
