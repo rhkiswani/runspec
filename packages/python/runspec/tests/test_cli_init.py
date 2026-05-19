@@ -366,3 +366,15 @@ def test_write_project_skips_existing_init_py(tmp_path, monkeypatch, capsys):
 
     assert existing.read_text() == "# existing\n"
     assert "already exists" in capsys.readouterr().out
+
+
+def test_write_project_install_path_in_next_steps(tmp_path, monkeypatch, capsys):
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    monkeypatch.chdir(pkg)
+    project_root = str(tmp_path)
+    cmd_init(["--name", "greet", "--write-project", project_root])
+
+    out = capsys.readouterr().out
+    assert f"pip install -e {project_root}" in out
+    assert f"run from {project_root}" in out

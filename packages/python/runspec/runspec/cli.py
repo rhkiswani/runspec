@@ -385,10 +385,10 @@ def _print_next_steps(install_from: str | None) -> None:
         print("         poetry install       # poetry")
         print("    3. Run 'runspec local' to validate your setup")
     else:
-        print("    1. Install before running (from project root):")
-        print("         pip install -e .")
-        print("         uv sync              # uv")
-        print("         poetry install       # poetry")
+        print("    1. Install before running:")
+        print(f"         pip install -e {install_from}")
+        print(f"         uv sync              # uv — run from {install_from}")
+        print(f"         poetry install       # poetry — run from {install_from}")
         print("    2. Run 'runspec local' to validate your setup")
 
 
