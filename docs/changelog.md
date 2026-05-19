@@ -4,6 +4,28 @@ All notable changes to runspec are documented here.
 
 ---
 
+## 0.8.4 — 2026-05-19
+
+### Changed
+
+**`runspec local` validates entry points.** A runnable in `runspec.toml`
+that has no corresponding entry point registered in `pyproject.toml` (or
+whose `pip install` hasn't been re-run) is now flagged as an error:
+
+```
+✗  'myrunnable' entry point not registered — add to [project.scripts]
+   in pyproject.toml and re-run pip install
+```
+
+The runnable is also marked `[not callable]` in the listing. `runspec local`
+exits with code 1 when any unregistered entry points are found.
+
+**Terminology.** "installed runnables" is replaced with "runspec
+runnable(s)" throughout — the package is installed, but individual
+runnables may not be callable until their entry point is wired up.
+
+---
+
 ## 0.8.3 — 2026-05-19
 
 ### Fixed

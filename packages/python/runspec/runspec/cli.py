@@ -43,7 +43,7 @@ def main() -> None:
 
 
 def cmd_local(args: list[str]) -> None:
-    """List installed runnables with inline validation, or emit schemas."""
+    """List discovered runnables with inline validation, or emit schemas."""
     fmt = _get_flag(args, "--format", default="text")
     script_name = _get_flag(args, "--script")
 
@@ -622,7 +622,10 @@ def _emit_all(discovered: list[dict[str, Any]], fmt: str) -> dict[str, Any]:
 
 
 def _print_local_text(discovered: list[dict[str, Any]]) -> None:
-    """Print installed runnables with inline validation warnings."""
+    """Print discovered runnables with inline validation warnings."""
+    from pathlib import Path
+
+    bin_dir = Path(sys.executable).parent
     by_source: dict[str, list[dict[str, Any]]] = {}
     for item in discovered:
         by_source.setdefault(item["source"], []).append(item)
@@ -630,7 +633,7 @@ def _print_local_text(discovered: list[dict[str, Any]]) -> None:
     errors: list[str] = []
     warnings: list[str] = []
 
-    print(f"Found {len(discovered)} installed runnable(s):\n")
+    print(f"Found {len(discovered)} runspec runnable(s):\n")
     for source, items in by_source.items():
         print(f"  {source}")
         for item in items:
@@ -638,7 +641,13 @@ def _print_local_text(discovered: list[dict[str, Any]]) -> None:
             runnable = item["spec"]
             desc = runnable.get("description") or ""
             autonomy = runnable.get("autonomy") or "confirm"
-            print(f"    {name:<24} {desc[:48]:<50}  [{autonomy}]")
+
+            entry_point = bin_dir / name
+            callable_marker = "" if entry_point.exists() else "  [not callable]"
+            print(f"    {name:<24} {desc[:48]:<50}  [{autonomy}]{callable_marker}")
+
+            if not entry_point.exists():
+                errors.append(f"'{name}' entry point not registered — add to [project.scripts] in pyproject.toml and re-run pip install")
 
             if not runnable.get("description"):
                 warnings.append(f"'{name}' has no description — agents won't know what it does")
@@ -704,7 +713,7 @@ Usage:
 
 Commands:
   init        Scaffold a new runnable — config and code stub
-  local       Inspect locally installed runnables
+  local       Discover and validate runnables in this environment
   serve       Start the MCP stdio server for this environment
   jump        List or run tools on a jump box via SSH
 
@@ -740,7 +749,7 @@ Options for init:
                    Supply an explicit path to override: --write-project /path/to/project
 
 Examples:
-  runspec local                                  # list installed runnables + validate
+  runspec local                                  # discover runnables + validate
   runspec local --format mcp                     # emit MCP tool schemas
   runspec local --format mcp --script deploy     # emit schema for one runnable
   runspec jump                                   # list tools from registry
