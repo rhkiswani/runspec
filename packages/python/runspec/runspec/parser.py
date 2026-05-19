@@ -360,7 +360,6 @@ def _build_runspec(
         __source__=config_path,
         __command__=command,
         __autonomy__=autonomy,
-        __output__=raw_script.get("output", "text"),
         __agent__=agent,
         __spec__=raw_script,
         __groups__=groups,
