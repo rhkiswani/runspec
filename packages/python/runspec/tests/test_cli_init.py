@@ -297,14 +297,16 @@ def test_example_toml_has_scan_runnable(tmp_path, monkeypatch):
     assert scan.get("output") == "json"
 
 
-def test_example_toml_scan_has_no_delete_arg(tmp_path, monkeypatch):
+def test_example_toml_scan_has_no_delete_or_format_arg(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     cmd_init(["--example"])
 
     from runspec.loader import load_raw
 
     raw = load_raw(tmp_path / "runspec.toml")
-    assert "delete" not in raw["runnables"]["scan"].get("args", {})
+    scan_args = raw["runnables"]["scan"].get("args", {})
+    assert "delete" not in scan_args
+    assert "format" not in scan_args
 
 
 def test_example_next_steps_shows_demo_prep(tmp_path, monkeypatch, capsys):
