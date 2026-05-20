@@ -98,6 +98,49 @@ Explicit fields (`port`, `ssh-key`) appear in argv before `ssh-options`,
 so on conflict the explicit field wins. If you specify both `port = 2222`
 and `ssh-options = ["Port=99"]`, the connection uses port 2222.
 
+#### Trust model
+
+`runspec jump` ultimately executes whatever binary lives at the resolved
+`bin` path on the remote. The format provides three forms of intent
+enforcement, but no cryptographic protection:
+
+1. **`bin` basename is locked to `runspec` / `runspec.exe`.** A naive
+   redirection (e.g. `bin = "/usr/bin/cat"`) is rejected before SSH runs.
+2. **MCP handshake required.** Any process that doesn't speak JSON-RPC
+   over stdio fails the `initialize` exchange and the call aborts.
+3. **`stderr` is streamed live.** Anything the remote process writes to
+   stderr (including pre-exec output from a wrapper script) appears in
+   the user's terminal in real time, not hidden behind a log file.
+
+These cover accidents (typos, stale values, wrong paths), not adversaries.
+The format **cannot** distinguish a real `runspec` binary from a wrapper
+script named `runspec` that runs malicious code and then `exec`s the real
+binary. Anyone with write access to either the local `runspec.toml` or
+the remote filesystem can route execution through a wrapper that's
+indistinguishable from a legitimate binary at the MCP layer.
+
+If your threat model includes that, the defenses live above runspec:
+
+- **Treat `runspec.toml` like shell config.** Audit changes via PR review;
+  don't accept TOMLs from untrusted sources without reading them.
+- **Lock down remote filesystem permissions.** The remote should not be
+  writable by anyone who isn't trusted to run code as you (the standard
+  SSH trust assumption).
+- **Pin `bin` to absolute paths under controlled directories.** Prefer
+  `/opt/...` or `/usr/...` paths managed by configuration management
+  (Ansible, Salt, etc.) over user-writable locations like `/tmp` or
+  `$HOME` subdirectories. A `bin = "/tmp/foo/runspec"` in a checked-in
+  TOML is a red flag worth questioning.
+- **Audit the runspec install on the remote.** The same way you'd audit
+  any binary you `pip install`. The package itself is not signed; rely
+  on PyPI's chain of trust and your venv's integrity.
+
+The `bin` field is documented as the runspec executable path. Treating
+it as anything else — even temporarily, even "just to test something" —
+breaks the trust model. The basename check exists to make that
+violation impossible to accidentally encode in a TOML; it does not make
+the field tamper-proof against a deliberate local actor.
+
 #### Cross-platform notes
 
 `runspec jump` invokes the system `ssh` binary. This works identically on:
