@@ -624,9 +624,13 @@ def _arg_to_json_schema(arg: dict[str, Any]) -> dict[str, Any]:
         "choice": "string",
     }
 
-    prop: dict[str, Any] = {
-        "type": type_map.get(arg.get("type", "str"), "string"),
-    }
+    arg_type = arg.get("type", "str")
+
+    # rest type: a list of strings captured after `--`
+    if arg_type == "rest":
+        prop: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
+    else:
+        prop = {"type": type_map.get(arg_type, "string")}
 
     if arg.get("description"):
         prop["description"] = arg["description"]
@@ -644,6 +648,11 @@ def _arg_to_json_schema(arg: dict[str, Any]) -> dict[str, Any]:
 
     if arg.get("multiple"):
         prop = {"type": "array", "items": prop}
+
+    # Pass-through metadata — emit under x-meta to keep the user's dict intact
+    # without colliding with built-in JSON Schema keywords.
+    if arg.get("meta"):
+        prop["x-meta"] = arg["meta"]
 
     return prop
 

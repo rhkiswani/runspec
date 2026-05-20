@@ -62,3 +62,49 @@ def test_x_autonomy_reason_present_when_set():
     script["autonomy_reason"] = "irreversible"
     schema = _build_schema("deploy", script, "mcp")
     assert schema.get("x-autonomy-reason") == "irreversible"
+
+
+# ── meta pass-through (x-meta on arg properties) ─────────────────────────────
+
+
+def test_x_meta_emitted_when_set():
+    script = _script(args={"days": {"type": "int", "meta": {"unit": "days"}}})
+    schema = _build_schema("clean", script, "mcp")
+    prop = schema["inputSchema"]["properties"]["days"]
+    assert prop["x-meta"] == {"unit": "days"}
+
+
+def test_x_meta_omitted_when_absent():
+    script = _script(args={"days": {"type": "int"}})
+    schema = _build_schema("clean", script, "mcp")
+    prop = schema["inputSchema"]["properties"]["days"]
+    assert "x-meta" not in prop
+
+
+def test_x_meta_preserves_full_dict():
+    """The user's meta dict is passed through unchanged — not flattened."""
+    meta = {"unit": "days", "impact": "destructive", "owner": "platform"}
+    script = _script(args={"days": {"type": "int", "meta": meta}})
+    schema = _build_schema("clean", script, "mcp")
+    prop = schema["inputSchema"]["properties"]["days"]
+    assert prop["x-meta"] == meta
+
+
+# ── rest type emission ───────────────────────────────────────────────────────
+
+
+def test_rest_type_emits_array_of_strings():
+    script = _script(args={"extra": {"type": "rest"}})
+    schema = _build_schema("wrap", script, "mcp")
+    prop = schema["inputSchema"]["properties"]["extra"]
+    assert prop == {"type": "array", "items": {"type": "string"}}
+
+
+def test_rest_type_with_description_and_meta():
+    script = _script(args={"extra": {"type": "rest", "description": "Pass-through", "meta": {"shape": "list"}}})
+    schema = _build_schema("wrap", script, "mcp")
+    prop = schema["inputSchema"]["properties"]["extra"]
+    assert prop["type"] == "array"
+    assert prop["items"] == {"type": "string"}
+    assert prop["description"] == "Pass-through"
+    assert prop["x-meta"] == {"shape": "list"}
