@@ -195,13 +195,13 @@ class RunSpec:
     """
 
     # Script identity
-    __script__: str
-    __source__: Path
-    __command__: str | None = None  # active subcommand if any
-    __autonomy__: str = "confirm"  # effective autonomy for this invocation
-    __agent__: bool = False  # True when called via runspec serve (RUNSPEC_AGENT=1)
-    __spec__: dict[str, Any] = field(default_factory=dict)
-    __groups__: list[Group] = field(default_factory=list)
+    __runspec_script__: str
+    __runspec_source__: Path
+    __runspec_command_path__: list[str] = field(default_factory=list)  # active subcommand path, deepest last
+    __runspec_autonomy__: str = "confirm"  # effective autonomy for this invocation
+    __runspec_agent__: bool = False  # True when called via runspec serve (RUNSPEC_AGENT=1)
+    __runspec_spec__: dict[str, Any] = field(default_factory=dict)
+    __runspec_groups__: list[Group] = field(default_factory=list)
 
     # Args are stored internally and exposed as attributes
     _args: dict[str, Arg] = field(default_factory=dict)
@@ -212,11 +212,11 @@ class RunSpec:
             args: dict[str, Arg] = object.__getattribute__(self, "_args")
             return args[name]
         except KeyError as err:
-            raise AttributeError(f"No argument '{name}' in spec for '{self.__script__}'. Available: {', '.join(self._args.keys())}") from err
+            raise AttributeError(f"No argument '{name}' in spec for '{self.__runspec_script__}'. Available: {', '.join(self._args.keys())}") from err
 
     def __repr__(self) -> str:
         args_repr = ", ".join(f"{k}={v.value!r}" for k, v in self._args.items())
-        return f"RunSpec(script={self.__script__!r}, {args_repr})"
+        return f"RunSpec(script={self.__runspec_script__!r}, {args_repr})"
 
     def _set_arg(self, name: str, arg: Arg) -> None:
         """Internal: store an arg. Normalises hyphens to underscores."""

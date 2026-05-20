@@ -66,11 +66,11 @@ def _parse_impl(script_name: str | None = None, argv: list[str] | None = None) -
 
     # 5. Resolve subcommand if any
     argv_list = argv if argv is not None else sys.argv[1:]
-    raw_script, active_command, argv_list = _resolve_subcommand(raw_script, argv_list)
+    raw_script, command_path, argv_list = _resolve_subcommand(raw_script, argv_list)
 
     # 6. Handle --help / -h before any validation
     if "--help" in argv_list or "-h" in argv_list:
-        _print_help(name, raw_script, active_command)
+        _print_help(name, raw_script, command_path[-1] if command_path else None)
         sys.exit(0)
 
     # 7. Parse argv into raw values
@@ -107,7 +107,7 @@ def _parse_impl(script_name: str | None = None, argv: list[str] | None = None) -
     return _build_runspec(
         name=name,
         config_path=config_path,
-        command=active_command,
+        command_path=command_path,
         autonomy=autonomy,
         agent=agent,
         coerced_values=coerced_values,
@@ -189,20 +189,21 @@ def _infer_from_argv() -> str:
 def _resolve_subcommand(
     raw_script: dict[str, Any],
     argv: list[str],
-) -> tuple[dict[str, Any], str | None, list[str]]:
+) -> tuple[dict[str, Any], list[str], list[str]]:
     """
     If the script has subcommands and argv[0] matches one, return the
-    subcommand spec and remaining argv. Otherwise return the script unchanged.
+    subcommand spec, command path, and remaining argv. Otherwise return
+    the script unchanged with an empty path.
     """
     commands = raw_script.get("commands", {})
     if not commands or not argv:
-        return raw_script, None, argv
+        return raw_script, [], argv
 
     candidate = argv[0]
     if candidate in commands:
-        return commands[candidate], candidate, argv[1:]
+        return commands[candidate], [candidate], argv[1:]
 
-    return raw_script, None, argv
+    return raw_script, [], argv
 
 
 def _parse_argv(
@@ -333,7 +334,7 @@ def _determine_source(name: str, parsed: dict[str, Any]) -> str:
 def _build_runspec(
     name: str,
     config_path: Path,
-    command: str | None,
+    command_path: list[str],
     autonomy: str,
     agent: bool,
     coerced_values: dict[str, Any],
@@ -356,13 +357,13 @@ def _build_runspec(
     ]
 
     runspec = RunSpec(
-        __script__=name,
-        __source__=config_path,
-        __command__=command,
-        __autonomy__=autonomy,
-        __agent__=agent,
-        __spec__=raw_script,
-        __groups__=groups,
+        __runspec_script__=name,
+        __runspec_source__=config_path,
+        __runspec_command_path__=command_path,
+        __runspec_autonomy__=autonomy,
+        __runspec_agent__=agent,
+        __runspec_spec__=raw_script,
+        __runspec_groups__=groups,
     )
 
     for arg_name, spec in arg_specs.items():

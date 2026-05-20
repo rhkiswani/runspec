@@ -235,7 +235,8 @@ def _init_runspec_toml(path: Path, name: str, example: bool = False) -> None:
         print(f"   Edit {path.name} directly to add more runnables.")
         sys.exit(1)
 
-    content = (
+    schema_line = "#:schema https://raw.githubusercontent.com/JasonFinestone/runspec/main/schema/runspec.schema.json\n\n"
+    content = schema_line + (
         _build_example_toml()
         if example
         else (f'[{name}]\ndescription = "Describe what {name} does"\nautonomy    = "confirm"\n\n[{name}.args]\n# example = {{type = "str", description = "An example argument"}}\n')
@@ -304,7 +305,7 @@ def main():
             print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
     if args.delete:
-        if not args.__agent__:
+        if not args.__runspec_agent__:
             print()
             confirm = input(f"Delete {len(matches)} file(s)? [y/N] ")
             if confirm.strip().lower() != "y":
