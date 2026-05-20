@@ -74,9 +74,31 @@ def _recv(proc: subprocess.Popen[bytes]) -> dict[str, Any]:
     assert proc.stdout is not None
     line = proc.stdout.readline()
     if not line:
-        sys.stderr.write("✗  Remote MCP server closed unexpectedly\n")
-        sys.exit(1)
+        _report_remote_failure(proc)
     return json.loads(line.decode())  # type: ignore[no-any-return]
+
+
+def _report_remote_failure(proc: subprocess.Popen[bytes]) -> None:
+    """The remote produced no MCP response — figure out why and report cleanly."""
+    try:
+        exit_code = proc.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        exit_code = None  # still alive but stdout closed — unusual
+
+    if exit_code == 255:
+        # OpenSSH conventional exit code for connection / authentication failure
+        sys.stderr.write("✗  SSH connection failed (see error above for details).\n")
+    elif exit_code is not None and exit_code != 0:
+        sys.stderr.write(
+            f"✗  Remote command failed (exit {exit_code}) before the MCP handshake completed.\n"
+            "   Common cause: `runspec` is not on the remote shell's PATH.\n"
+            '   Fix: set `bin = "/full/path/to/runspec"` in [config.jump-hosts.<alias>],\n'
+            "   or export RUNSPEC_JUMP_BIN in your local shell.\n"
+            "   (SSH commands run in a non-login shell and don't source ~/.bashrc / ~/.profile.)\n"
+        )
+    else:
+        sys.stderr.write("✗  Remote MCP server closed stdout unexpectedly\n")
+    sys.exit(1)
 
 
 def _close(proc: subprocess.Popen[bytes]) -> None:

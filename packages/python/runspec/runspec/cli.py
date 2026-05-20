@@ -300,8 +300,13 @@ def _build_example_toml() -> str:
         "#   user, port, ssh-key, bin   — direct overrides (bin env: RUNSPEC_JUMP_BIN)\n"
         "#   use-ssh-config = false      — ignore ~/.ssh/config (passes -F /dev/null)\n"
         '#   ssh-options = ["X=Y", ...]  — extra -o KEY=VALUE options passed to ssh\n'
+        "#\n"
+        "# Note: SSH runs commands in a non-login shell, so it doesn't source\n"
+        "# ~/.bashrc / ~/.profile. If `runspec` isn't on the remote's default\n"
+        '# PATH (e.g. you installed into a venv), set bin to the full path.\n'
         "[config.jump-hosts.localhost]\n"
         'host = "localhost"\n'
+        '# bin = "/path/to/.venv/bin/runspec"   # set when runspec isn\'t on the remote shell PATH\n'
         "\n"
         "# `meta = {...}` on args is a pass-through table for project-defined\n"
         "# metadata — runspec never interprets it. Use it for unit hints, impact\n"

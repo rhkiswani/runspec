@@ -278,3 +278,56 @@ def test_parse_tool_argv_non_flag_tokens_ignored() -> None:
 def test_parse_tool_argv_missing_value_exits(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(SystemExit):
         parse_tool_argv(["--env"], _SCHEMA)
+
+
+# ── _report_remote_failure — friendly errors when SSH dies early ─────────────
+
+
+class _FakeProc:
+    """Minimal stand-in for subprocess.Popen used by _report_remote_failure tests."""
+
+    def __init__(self, exit_code: int | None):
+        self._exit_code = exit_code
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self._exit_code is None:
+            import subprocess as _sp
+
+            raise _sp.TimeoutExpired(cmd="ssh", timeout=timeout or 1)
+        return self._exit_code
+
+
+def test_report_remote_failure_command_not_found(capsys: pytest.CaptureFixture[str]) -> None:
+    """exit 127 (or any non-255 non-zero) is the typical PATH-resolution failure."""
+    from runspec.jump import _report_remote_failure
+
+    with pytest.raises(SystemExit) as exc:
+        _report_remote_failure(_FakeProc(exit_code=127))
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "exit 127" in err
+    assert "PATH" in err
+    assert "bin" in err
+    assert "RUNSPEC_JUMP_BIN" in err
+
+
+def test_report_remote_failure_ssh_connection(capsys: pytest.CaptureFixture[str]) -> None:
+    """exit 255 is OpenSSH's connection-failure exit code."""
+    from runspec.jump import _report_remote_failure
+
+    with pytest.raises(SystemExit) as exc:
+        _report_remote_failure(_FakeProc(exit_code=255))
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "SSH connection failed" in err
+
+
+def test_report_remote_failure_stdout_closed_but_process_alive(capsys: pytest.CaptureFixture[str]) -> None:
+    """Unusual case: stdout EOF but process still running — fall back to generic message."""
+    from runspec.jump import _report_remote_failure
+
+    with pytest.raises(SystemExit) as exc:
+        _report_remote_failure(_FakeProc(exit_code=None))
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "closed stdout unexpectedly" in err
