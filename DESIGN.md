@@ -314,7 +314,7 @@ MCP host config mirrors Ansible inventory:
   → config shipped alongside SSH keys to any new client machine
 ```
 
-The registry (`runspec-registry`) is still the right solution for **dynamic** environments where hosts spin up and down and tool availability changes at runtime. For known, stable host inventories the SSH pattern is simpler and has no extra moving parts.
+A registry service (`runspec-registry` on PyPI, archived at 0.1.1) was prototyped for **dynamic** environments where hosts spin up and down and tool availability changes at runtime. In practice the known-host SSH pattern covered every case we cared about, and the heartbeat-to-registry wiring was removed from `runspec serve` (see the "Released packages" table). The PyPI artifact remains for historical reference; the CLI no longer ships with the registry client.
 
 ---
 
@@ -1164,6 +1164,6 @@ Active development. Core design settled and implemented across Python and Node.
 |---|---|---|
 | `runspec` (PyPI) | 0.8.8 | Stable — full CLI, MCP serve, SSH transport |
 | `runspec-node` (npm) | 0.7.0 | Stable — CLI parity with Python |
-| `runspec-registry` (PyPI) | 0.1.1 | Available — for dynamic host environments |
+| `runspec-registry` (PyPI) | 0.1.1 | Archived — registry client removed from `runspec serve`; SSH+MCP jump-host model replaces it |
 
 **Next:** Chainlit app — LangChain + `langchain-mcp-adapters` + SSH-as-stdio transport, connecting to known Ansible-managed hosts without a registry.
