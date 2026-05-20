@@ -19,6 +19,7 @@ CLI parses --help through parse() against its own bundled spec.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -185,7 +186,8 @@ def _cmd_list_jump_hosts(fmt: str) -> None:
     for alias, cfg in jump_hosts.items():
         host = cfg.get("host", alias)
         user = cfg.get("user")
-        bin_path = cfg.get("bin", "runspec")
+        # Mirror jump.ssh_cmd's bin cascade: TOML → RUNSPEC_JUMP_BIN → "runspec"
+        bin_path = cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
         target = f"{user}@{host}" if user else host
         print(f"  {alias:<20} {target}  bin={bin_path}")
 
