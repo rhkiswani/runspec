@@ -27,11 +27,6 @@ def main() -> None:
     command = args[0]
     rest = args[1:]
 
-    pre_sep = rest[: rest.index("--")] if "--" in rest else rest
-    if "-h" in pre_sep or "--help" in pre_sep:
-        _print_command_help(command)
-        return
-
     commands = {
         "init": cmd_init,
         "local": cmd_local,
@@ -44,18 +39,35 @@ def main() -> None:
         print(f"   Available commands: {', '.join(commands)}")
         sys.exit(1)
 
-    commands[command](rest)
+    if command == "jump":
+        # jump manages its own -- split for tool pass-through args
+        commands[command](rest)
+        return
+
+    # For init/local/serve: pre-split on -- so pass-through args don't pollute parsing
+    cli_args = rest[: rest.index("--")] if "--" in rest else rest
+
+    if "-h" in cli_args or "--help" in cli_args:
+        _print_command_help(command)
+        return
+
+    commands[command](cli_args)
 
 
 def cmd_local(args: list[str]) -> None:
     """List discovered runnables with inline validation, or emit schemas."""
-    fmt = _get_flag(args, "--format", default="text")
-    script_name = _get_flag(args, "--script")
+    from runspec.parser import parse as _parse
+
+    _cli_config = Path(__file__).parent / "runspec.toml"
+    parsed = _parse(script_name="runspec", argv=["local"] + args, config_path=_cli_config)
+
+    fmt = str(parsed.format)
+    script_filter: str | None = parsed.script.value
 
     discovered = _deduplicate(_discover_installed())
 
-    if script_name:
-        discovered = [d for d in discovered if d["runnable"] == script_name]
+    if script_filter:
+        discovered = [d for d in discovered if d["runnable"] == script_filter]
 
     if not discovered:
         print("No runspec-aware runnables found in this environment.")
@@ -81,14 +93,18 @@ def cmd_local(args: list[str]) -> None:
 
 def cmd_serve(args: list[str]) -> None:
     """Start the MCP stdio server for local runnables."""
+    from runspec.parser import parse as _parse
     from runspec.serve import serve
 
-    registry_url = _get_flag(args, "--registry")
-    name = _get_flag(args, "--name")
-    registry_key = _get_flag(args, "--registry-key")
-    registry_cert = _get_flag(args, "--registry-cert")
-    dev = "--dev" in args
-    serve(registry_url=registry_url, name=name, registry_key=registry_key, registry_cert=registry_cert, dev=dev)
+    _cli_config = Path(__file__).parent / "runspec.toml"
+    parsed = _parse(script_name="runspec", argv=["serve"] + args, config_path=_cli_config)
+    serve(
+        registry_url=parsed.registry.value,
+        name=parsed.name.value,
+        registry_key=parsed.registry_key.value,
+        registry_cert=parsed.registry_cert.value,
+        dev=bool(parsed.dev),
+    )
 
 
 def cmd_jump(args: list[str]) -> None:

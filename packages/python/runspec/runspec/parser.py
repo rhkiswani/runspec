@@ -20,19 +20,20 @@ from runspec.types import coerce
 from runspec.validator import raise_if_errors, validate_args, validate_groups
 
 
-def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunSpec:
+def parse(script_name: str | None = None, argv: list[str] | None = None, config_path: Path | None = None) -> RunSpec:
     """
     Parse arguments for the calling runnable.
 
     Args:
         script_name: Override runnable name. Inferred from [project.scripts] if None.
         argv:        Override sys.argv. Uses sys.argv[1:] if None. Useful for testing.
+        config_path: Override config file location. Walks up from cwd if None.
 
     Returns:
         RunSpec — the fully parsed, validated, coerced argument namespace.
     """
     try:
-        return _parse_impl(script_name, argv)
+        return _parse_impl(script_name, argv, config_path)
     except errors.RunSpecError as e:
         print(str(e))
         sys.exit(1)
@@ -41,10 +42,11 @@ def parse(script_name: str | None = None, argv: list[str] | None = None) -> RunS
         sys.exit(1)
 
 
-def _parse_impl(script_name: str | None = None, argv: list[str] | None = None) -> RunSpec:
+def _parse_impl(script_name: str | None = None, argv: list[str] | None = None, config_path: Path | None = None) -> RunSpec:
     """Internal: full parse pipeline. Raises on error — call parse() for CLI use."""
     # 1. Find config
-    config_path = find_config()
+    if config_path is None:
+        config_path = find_config()
 
     # 2. Load and normalise TOML
     raw = load_raw(config_path)
@@ -117,14 +119,14 @@ def _parse_impl(script_name: str | None = None, argv: list[str] | None = None) -
     )
 
 
-def load_spec(script_name: str | None = None) -> RunSpec:
+def load_spec(script_name: str | None = None, config_path: Path | None = None) -> RunSpec:
     """
     Load the spec without parsing argv. Useful for introspection,
     emit, and scaffold operations.
 
     Returns a RunSpec with default values only — no CLI args applied.
     """
-    return parse(script_name=script_name, argv=[])
+    return parse(script_name=script_name, argv=[], config_path=config_path)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────

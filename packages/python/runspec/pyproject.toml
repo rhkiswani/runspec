@@ -57,7 +57,7 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 
 [tool.setuptools.package-data]
-runspec = ["py.typed"]
+runspec = ["py.typed", "runspec.toml"]
 
 # ── ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]

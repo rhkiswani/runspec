@@ -1,0 +1,50 @@
+#:schema https://raw.githubusercontent.com/JasonFinestone/runspec/main/schema/runspec.schema.json
+
+[runspec]
+description = "Parse and validate runspec.toml files, discover runnables, and serve them as MCP tools"
+autonomy    = "confirm"
+
+[runspec.commands.init]
+description = "Scaffold a new runnable — creates runspec.toml and a code stub"
+autonomy    = "confirm"
+
+[runspec.commands.init.args]
+name          = {type = "str",    description = "Runnable name (defaults to package directory name)", required = false}
+lang          = {type = "choice", description = "Language for the generated code stub", options = ["python", "typescript", "javascript"], default = "python"}
+example       = {type = "flag",   description = "Generate a worked example (clean + scan runnables)", default = false}
+write_project = {type = "flag",   description = "Also generate pyproject.toml, __init__.py, .gitignore, and CLAUDE.md one level up", default = false}
+
+[runspec.commands.local]
+description = "List installed runnables or emit their tool schemas"
+autonomy    = "autonomous"
+output      = "json"
+
+[runspec.commands.local.args]
+format = {type = "choice", description = "Output format", options = ["text", "json", "mcp", "openai", "anthropic"], default = "text"}
+script = {type = "str",    description = "Filter output to a single runnable by name", required = false}
+
+[runspec.commands.serve]
+description = "Start an MCP stdio server exposing all installed runnables as tools"
+autonomy    = "confirm"
+
+[runspec.commands.serve.args]
+dev          = {type = "flag", description = "Also discover runnables from runspec.toml files under the project root (development mode)", default = false}
+registry     = {type = "str", description = "URL of the runspec-registry to heartbeat to",                required = false}
+name         = {type = "str", description = "Instance name reported to the registry (defaults to venv directory name)", required = false}
+registry_key = {type = "str", description = "API key for authenticated registry writes",                   required = false}
+registry_cert = {type = "str", description = "Path to CA certificate for registry TLS verification",      required = false}
+
+[runspec.commands.jump]
+description = "Run a tool on a remote host via SSH, or list available tools from the registry"
+autonomy    = "confirm"
+
+[runspec.commands.jump.args]
+tool              = {type = "str",  description = "Name of the tool to run (omit to list available tools)"}
+host              = {type = "str",  description = "SSH hostname to run the tool on"}
+registry          = {type = "str",  description = "Registry URL to look up tools and host metadata"}
+registry_key      = {type = "str",  description = "API key for authenticated registry reads"}
+registry_cert     = {type = "str",  description = "Path to CA certificate for registry TLS verification"}
+user              = {type = "str",  description = "SSH user (defaults to current user)"}
+ssh_key           = {type = "path", description = "Path to SSH private key"}
+no_host_key_check = {type = "flag", description = "Disable SSH host key verification", default = false, autonomy = "supervised"}
+format            = {type = "choice", description = "Output format when listing tools", options = ["text", "json"], default = "text"}
