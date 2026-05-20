@@ -203,10 +203,16 @@ def cmd_jump(args: list[str]) -> None:
 
 def cmd_init(args: list[str]) -> None:
     """Scaffold a new runnable — config and code stub."""
-    name_flag = _get_flag(args, "--name")
-    lang_flag = _get_flag(args, "--lang") or "python"
-    example = "--example" in args
-    write_project, project_root_arg = _get_optional_flag(args, "--write-project", default="..")
+    from runspec.parser import parse as _parse
+
+    _cli_config = Path(__file__).parent / "runspec.toml"
+    parsed = _parse(script_name="runspec", argv=["init"] + args, config_path=_cli_config)
+
+    name_flag: str | None = parsed.name.value
+    lang_flag = str(parsed.lang)
+    example = bool(parsed.example)
+    write_project = bool(parsed.write_project)
+    project_dir_arg: str | None = parsed.project_dir.value
 
     cwd = Path.cwd()
     pkg_name = _sanitize_name(cwd.name)
@@ -223,12 +229,12 @@ def cmd_init(args: list[str]) -> None:
     _init_code_stub(cwd, runnable_name, lang_flag, example=example)
 
     if write_project:
-        project_root = (cwd / (project_root_arg or "..")).resolve()
+        project_root = (cwd / (project_dir_arg or "..")).resolve()
         _init_package_init(cwd)
         _init_pyproject(project_root, runnable_name, pkg_name, example=example)
         _init_gitignore(project_root)
         _init_claude_md(project_root, pkg_name)
-        _print_next_steps(install_from=project_root_arg, example=example)
+        _print_next_steps(install_from=project_dir_arg or "..", example=example)
     else:
         if example:
             _print_pyproject_snippet_example(pkg_name)
@@ -835,21 +841,6 @@ def _get_flag(args: list[str], flag: str, default: str | None = None) -> str | N
         return args[idx + 1]
     except (ValueError, IndexError):
         return default
-
-
-def _get_optional_flag(args: list[str], flag: str, default: str | None = None) -> tuple[bool, str | None]:
-    """Return (present, value) for a flag whose value argument is optional.
-
-    If the token after the flag exists and does not start with '-', it is
-    consumed as the value.  Otherwise the supplied default is used.
-    """
-    try:
-        idx = args.index(flag)
-    except ValueError:
-        return False, None
-    if idx + 1 < len(args) and not args[idx + 1].startswith("-"):
-        return True, args[idx + 1]
-    return True, default
 
 
 def _print_command_help(command: str) -> None:

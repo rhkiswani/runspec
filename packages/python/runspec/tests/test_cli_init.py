@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from runspec.cli import _get_optional_flag, _sanitize_name, cmd_init
+from runspec.cli import _sanitize_name, cmd_init
 
 # ── _sanitize_name ────────────────────────────────────────────────────────────
 
@@ -328,25 +328,6 @@ def test_example_pyproject_snippet_includes_both_entry_points(tmp_path, monkeypa
     assert ".scan:main" in out
 
 
-# ── _get_optional_flag ────────────────────────────────────────────────────────
-
-
-def test_optional_flag_absent():
-    assert _get_optional_flag([], "--write-project", default="..") == (False, None)
-
-
-def test_optional_flag_present_no_value():
-    assert _get_optional_flag(["--write-project"], "--write-project", default="..") == (True, "..")
-
-
-def test_optional_flag_present_with_value():
-    assert _get_optional_flag(["--write-project", "/tmp/proj"], "--write-project", default="..") == (True, "/tmp/proj")
-
-
-def test_optional_flag_stops_at_next_flag():
-    assert _get_optional_flag(["--write-project", "--example"], "--write-project", default="..") == (True, "..")
-
-
 # ── --write-project: file generation ─────────────────────────────────────────
 
 
@@ -354,7 +335,7 @@ def test_write_project_creates_pyproject(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     assert (tmp_path / "pyproject.toml").exists()
 
 
@@ -362,7 +343,7 @@ def test_write_project_creates_init_py(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     assert (pkg / "__init__.py").exists()
 
 
@@ -370,7 +351,7 @@ def test_write_project_pyproject_content(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
 
     content = (tmp_path / "pyproject.toml").read_text()
     assert 'name            = "greet"' in content
@@ -385,7 +366,7 @@ def test_write_project_pyproject_is_valid_toml(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
 
     import sys
 
@@ -407,7 +388,7 @@ def test_write_project_skips_existing_pyproject(tmp_path, monkeypatch, capsys):
     existing = tmp_path / "pyproject.toml"
     existing.write_text("[project]\nname = 'existing'\n", encoding="utf-8")
 
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
 
     assert existing.read_text() == "[project]\nname = 'existing'\n"
     out = capsys.readouterr().out
@@ -420,7 +401,7 @@ def test_write_project_with_example(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--example", "--write-project", str(tmp_path)])
+    cmd_init(["--example", "--write-project", "--project-dir", str(tmp_path)])
 
     assert (tmp_path / "pyproject.toml").exists()
     assert (pkg / "clean.py").exists()
@@ -438,7 +419,7 @@ def test_write_project_skips_existing_init_py(tmp_path, monkeypatch, capsys):
     existing = pkg / "__init__.py"
     existing.write_text("# existing\n", encoding="utf-8")
 
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
 
     assert existing.read_text() == "# existing\n"
     assert "already exists" in capsys.readouterr().out
@@ -448,7 +429,7 @@ def test_write_project_creates_gitignore(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     assert (tmp_path / ".gitignore").exists()
 
 
@@ -456,7 +437,7 @@ def test_write_project_gitignore_content(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     content = (tmp_path / ".gitignore").read_text()
     assert "*.egg-info/" in content
     assert "__pycache__/" in content
@@ -469,7 +450,7 @@ def test_write_project_skips_existing_gitignore(tmp_path, monkeypatch, capsys):
     pkg.mkdir()
     monkeypatch.chdir(pkg)
     (tmp_path / ".gitignore").write_text("# existing\n", encoding="utf-8")
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     assert (tmp_path / ".gitignore").read_text() == "# existing\n"
     assert ".gitignore already exists" in capsys.readouterr().out
 
@@ -478,7 +459,7 @@ def test_write_project_creates_claude_md(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     assert (tmp_path / "CLAUDE.md").exists()
 
 
@@ -486,7 +467,7 @@ def test_write_project_claude_md_content(tmp_path, monkeypatch):
     pkg = tmp_path / "mypkg"
     pkg.mkdir()
     monkeypatch.chdir(pkg)
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     content = (tmp_path / "CLAUDE.md").read_text()
     assert "runspec" in content
     assert "runspec.toml" in content
@@ -499,7 +480,7 @@ def test_write_project_skips_existing_claude_md(tmp_path, monkeypatch, capsys):
     pkg.mkdir()
     monkeypatch.chdir(pkg)
     (tmp_path / "CLAUDE.md").write_text("# existing\n", encoding="utf-8")
-    cmd_init(["--name", "greet", "--write-project", str(tmp_path)])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", str(tmp_path)])
     assert (tmp_path / "CLAUDE.md").read_text() == "# existing\n"
     assert "CLAUDE.md already exists" in capsys.readouterr().out
 
@@ -509,7 +490,7 @@ def test_write_project_install_path_in_next_steps(tmp_path, monkeypatch, capsys)
     pkg.mkdir()
     monkeypatch.chdir(pkg)
     project_root = str(tmp_path)
-    cmd_init(["--name", "greet", "--write-project", project_root])
+    cmd_init(["--name", "greet", "--write-project", "--project-dir", project_root])
 
     out = capsys.readouterr().out
     assert f"pip install -e {project_root}" in out
