@@ -218,6 +218,17 @@ class RunSpec:
         args_repr = ", ".join(f"{k}={v.value!r}" for k, v in self._args.items())
         return f"RunSpec(script={self.__runspec_script__!r}, {args_repr})"
 
+    @property
+    def runspec_command(self) -> str | None:
+        """Active subcommand name (leaf), or None if no subcommand was invoked."""
+        path = self.__runspec_command_path__
+        return path[-1] if path else None
+
+    @property
+    def runspec_command_path(self) -> list[str]:
+        """Full subcommand path as a list, deepest last. Empty if no subcommand."""
+        return self.__runspec_command_path__
+
     def _set_arg(self, name: str, arg: Arg) -> None:
         """Internal: store an arg. Normalises hyphens to underscores."""
         normalised = name.replace("-", "_")
