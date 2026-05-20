@@ -139,9 +139,8 @@ def _report_remote_failure(proc: subprocess.Popen[bytes], bin_path: str | None =
         if bin_path and "/" in bin_path:
             sys.stderr.write(
                 prefix
-                + f"   The path you provided does not exist or is not executable on the remote:\n"
+                + "   If the error above doesn't explain it, verify the path exists on the remote:\n"
                 f"     {bin_path}\n"
-                "   Verify it on the remote (e.g. `ssh <host> ls -l <path>`).\n"
                 "   Common causes:\n"
                 "     - the venv path differs between local and remote\n"
                 "     - runspec isn't installed in that venv on the remote\n"
