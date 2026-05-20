@@ -409,3 +409,73 @@ def test_bin_path_env_var_also_validated(monkeypatch: pytest.MonkeyPatch, capsys
     assert exc.value.code == 1
     err = capsys.readouterr().err
     assert "/etc/passwd" in err
+
+
+# ── jump --list-jump-hosts shows effective bin (cascaded) in BOTH formats ─────
+
+
+def _make_toml(tmp_path: Any, content: str) -> Any:
+    """Write a runspec.toml in tmp_path and return its path."""
+    p = tmp_path / "runspec.toml"
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+def test_list_jump_hosts_text_shows_effective_bin_from_env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    from runspec.cli import _cmd_list_jump_hosts
+
+    _make_toml(tmp_path, '[config.jump-hosts.localhost]\nhost = "localhost"\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RUNSPEC_JUMP_BIN", "/opt/svc/.venv/bin/runspec")
+
+    _cmd_list_jump_hosts("text")
+    out = capsys.readouterr().out
+    assert "/opt/svc/.venv/bin/runspec" in out
+    assert "bin=None" not in out
+
+
+def test_list_jump_hosts_json_shows_effective_bin_from_env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """Both text and JSON output must show the effective bin — not raw null."""
+    import json as _json
+
+    from runspec.cli import _cmd_list_jump_hosts
+
+    _make_toml(tmp_path, '[config.jump-hosts.localhost]\nhost = "localhost"\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RUNSPEC_JUMP_BIN", "/opt/svc/.venv/bin/runspec")
+
+    _cmd_list_jump_hosts("json")
+    parsed = _json.loads(capsys.readouterr().out)
+    assert parsed[0]["bin"] == "/opt/svc/.venv/bin/runspec"
+    # No null bin — that was the bug
+    assert parsed[0]["bin"] is not None
+
+
+def test_list_jump_hosts_json_shows_default_runspec_when_unset(tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """No TOML bin and no env var → 'runspec' default, not null."""
+    import json as _json
+
+    from runspec.cli import _cmd_list_jump_hosts
+
+    _make_toml(tmp_path, '[config.jump-hosts.localhost]\nhost = "localhost"\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("RUNSPEC_JUMP_BIN", raising=False)
+
+    _cmd_list_jump_hosts("json")
+    parsed = _json.loads(capsys.readouterr().out)
+    assert parsed[0]["bin"] == "runspec"
+
+
+def test_list_jump_hosts_json_toml_bin_overrides_env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """TOML bin takes precedence over RUNSPEC_JUMP_BIN in the listing too."""
+    import json as _json
+
+    from runspec.cli import _cmd_list_jump_hosts
+
+    _make_toml(tmp_path, '[config.jump-hosts.localhost]\nhost = "localhost"\nbin = "/toml/runspec"\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RUNSPEC_JUMP_BIN", "/env/runspec")
+
+    _cmd_list_jump_hosts("json")
+    parsed = _json.loads(capsys.readouterr().out)
+    assert parsed[0]["bin"] == "/toml/runspec"

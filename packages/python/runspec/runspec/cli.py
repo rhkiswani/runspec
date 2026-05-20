@@ -19,7 +19,6 @@ CLI parses --help through parse() against its own bundled spec.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -178,18 +177,22 @@ def _cmd_list_jump_hosts(fmt: str) -> None:
         print("Add [config.jump-hosts.<name>] sections to your runspec.toml.")
         return
 
+    # Apply the bin cascade once so both text and JSON show the effective value
+    # (what would actually run at jump time), not the raw TOML field.
+    from runspec.jump import _resolve_bin_raw
+
+    effective_hosts = [{**cfg, "bin": _resolve_bin_raw(cfg)} for cfg in jump_hosts.values()]
+
     if fmt == "json":
-        print(json.dumps(list(jump_hosts.values()), indent=2, default=str))
+        print(json.dumps(effective_hosts, indent=2, default=str))
         return
 
     print("Configured jump hosts:\n")
-    for alias, cfg in jump_hosts.items():
-        host = cfg.get("host", alias)
+    for cfg in effective_hosts:
+        host = cfg["host"]
         user = cfg.get("user")
-        # Mirror jump.ssh_cmd's bin cascade: TOML → RUNSPEC_JUMP_BIN → "runspec"
-        bin_path = cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
         target = f"{user}@{host}" if user else host
-        print(f"  {alias:<20} {target}  bin={bin_path}")
+        print(f"  {cfg['name']:<20} {target}  bin={cfg['bin']}")
 
 
 def _load_jump_host(name: str) -> dict[str, Any]:

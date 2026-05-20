@@ -14,9 +14,18 @@ import sys
 from typing import Any
 
 
+def _resolve_bin_raw(host_cfg: dict[str, Any]) -> str:
+    """Cascade only — no validation. Used by listing so we can show what *would*
+    happen at jump time even if the value is currently invalid."""
+    return host_cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
+
+
 def _resolve_bin(host_cfg: dict[str, Any]) -> str:
-    """Cascade: TOML `bin` → RUNSPEC_JUMP_BIN env var → 'runspec' default."""
-    bin_path = host_cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
+    """Cascade: TOML `bin` → RUNSPEC_JUMP_BIN env var → 'runspec' default.
+
+    Validates the result. Used at ssh_cmd time when we actually need to run.
+    """
+    bin_path = _resolve_bin_raw(host_cfg)
     _validate_bin_path(bin_path)
     return bin_path
 
