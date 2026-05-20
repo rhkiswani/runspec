@@ -42,15 +42,15 @@ autonomy    = "autonomous"
 output      = "json"
 
 examples = [
-  {cmd = "runspec local",                              description = "Discover runnables and validate setup"},
-  {cmd = "runspec local --format mcp",                 description = "Emit MCP tool schemas"},
-  {cmd = "runspec local --format mcp --script deploy", description = "Emit schema for one runnable"},
-  {cmd = "runspec local --format json",                description = "Full spec as JSON"},
+  {cmd = "runspec local",                                description = "Discover runnables and validate setup"},
+  {cmd = "runspec local --format mcp",                   description = "Emit MCP tool schemas"},
+  {cmd = "runspec local --format mcp --runnable deploy", description = "Emit schema for one runnable"},
+  {cmd = "runspec local --format json",                  description = "Full spec as JSON"},
 ]
 
 [runspec.commands.local.args]
-format = {type = "choice", description = "Output format", options = ["text", "json", "mcp", "openai", "anthropic"], default = "text"}
-script = {type = "str",    description = "Filter output to a single runnable by name", required = false}
+format   = {type = "choice", description = "Output format", options = ["text", "json", "mcp", "openai", "anthropic"], default = "text"}
+runnable = {type = "str",    description = "Filter output to a single runnable by name", required = false}
 
 [runspec.commands.serve]
 description = "Start an MCP stdio server exposing all installed runnables as tools"

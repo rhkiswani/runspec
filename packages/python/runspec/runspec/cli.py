@@ -4,7 +4,7 @@ cli.py — The runspec command-line interface.
 Commands:
     runspec init   [--name <name>] [--lang python|typescript|javascript]
                    [--example] [--write-project] [--project-dir <path>]
-    runspec local  [--format text|json|mcp|openai|anthropic] [--script <name>]
+    runspec local  [--format text|json|mcp|openai|anthropic] [--runnable <name>]
     runspec serve
     runspec jump   [--list-jump-hosts] [<jump_host> [<tool>] [-- tool-args...]]
 
@@ -60,12 +60,12 @@ def cmd_local(args: list[str]) -> None:
     parsed = _parse(script_name="runspec", argv=["local"] + args, config_path=_CLI_CONFIG)
 
     fmt = str(parsed.format)
-    script_filter: str | None = parsed.script.value
+    runnable_filter: str | None = parsed.runnable.value
 
     discovered = _deduplicate(_discover_installed())
 
-    if script_filter:
-        discovered = [d for d in discovered if d["runnable"] == script_filter]
+    if runnable_filter:
+        discovered = [d for d in discovered if d["runnable"] == runnable_filter]
 
     if not discovered:
         print("No runspec-aware runnables found in this environment.")
