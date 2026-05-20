@@ -186,10 +186,10 @@ test('emit command is no longer available', () => {
   expect(stdout).toContain('Unknown command');
 });
 
-test('jump command is recognized', () => {
+test('jump command requires a host name', () => {
   const dir = tmpDir();
-  const { stdout } = runCLI(dir, ['jump']);
-  expect(stdout).toContain('not yet implemented');
+  const { stderr } = runCLI(dir, ['jump']);
+  expect(stderr).toContain('jump host name is required');
 });
 
 // ── help ──────────────────────────────────────────────────────────────────────

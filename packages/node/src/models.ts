@@ -1,7 +1,18 @@
+export interface JumpHostConfig {
+  host: string;
+  user?: string;
+  port?: number;
+  sshKey?: string;
+  bin?: string;
+  useSshConfig?: boolean;
+  sshOptions?: string[];
+}
+
 export interface RawConfig {
   autonomyDefault: string;
   lang?: string;
   version: string;
+  jumpHosts: Record<string, JumpHostConfig>;
 }
 
 export interface ArgSpec {
@@ -15,6 +26,7 @@ export interface ArgSpec {
   multiple?: boolean;
   delimiter?: string;
   short?: string;
+  position?: number;
   env?: string;
   deprecated?: string;
   autonomy?: string;

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { parse as parseTOML } from 'smol-toml';
-import type { RawConfig, RawSpec, ScriptSpec, ArgSpec, GroupSpec } from './models';
+import type { RawConfig, RawSpec, ScriptSpec, ArgSpec, GroupSpec, JumpHostConfig } from './models';
 
 export function loadRaw(configPath: string): RawSpec {
   const content = fs.readFileSync(configPath, 'utf-8');
@@ -20,10 +20,28 @@ export function loadRaw(configPath: string): RawSpec {
 }
 
 function normaliseConfig(raw: Record<string, unknown>): RawConfig {
+  const rawHosts = (raw['jump-hosts'] ?? {}) as Record<string, Record<string, unknown>>;
+  const jumpHosts: Record<string, JumpHostConfig> = {};
+  for (const [name, cfg] of Object.entries(rawHosts)) {
+    jumpHosts[name] = normaliseJumpHost(cfg);
+  }
   return {
     autonomyDefault: (raw['autonomy-default'] as string | undefined) ?? 'confirm',
     lang: raw['lang'] as string | undefined,
     version: String(raw['version'] ?? '1'),
+    jumpHosts,
+  };
+}
+
+function normaliseJumpHost(raw: Record<string, unknown>): JumpHostConfig {
+  return {
+    host: raw['host'] as string,
+    user: raw['user'] as string | undefined,
+    port: raw['port'] as number | undefined,
+    sshKey: raw['ssh-key'] as string | undefined,
+    bin: raw['bin'] as string | undefined,
+    useSshConfig: raw['use-ssh-config'] as boolean | undefined,
+    sshOptions: raw['ssh-options'] as string[] | undefined,
   };
 }
 
@@ -67,6 +85,7 @@ function normaliseArg(name: string, raw: Record<string, unknown>): ArgSpec {
     multiple: (raw['multiple'] as boolean | undefined) ?? false,
     delimiter: raw['delimiter'] as string | undefined,
     short: raw['short'] as string | undefined,
+    position: raw['position'] as number | undefined,
     env: raw['env'] as string | undefined,
     deprecated: raw['deprecated'] as string | undefined,
     autonomy: raw['autonomy'] as string | undefined,

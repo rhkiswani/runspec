@@ -8,7 +8,7 @@
     "runspec": "./bin/runspec.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/runspec.toml dist/runspec.toml",
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

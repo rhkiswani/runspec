@@ -11,12 +11,13 @@ export interface ParseOptions {
   scriptName?: string;
   argv?: string[];
   cwd?: string;
+  configPath?: string;
 }
 
 export function parse(opts: ParseOptions = {}): ParsedArgs {
-  const { scriptName, argv: argvOverride, cwd } = opts;
+  const { scriptName, argv: argvOverride, cwd, configPath: configPathOverride } = opts;
 
-  const { configPath } = findConfig(cwd);
+  const { configPath } = configPathOverride ? { configPath: configPathOverride } : findConfig(cwd);
   const raw = loadRaw(configPath);
   const config = raw.config;
 
@@ -97,14 +98,28 @@ function parseArgv(argv: string[], argSpecs: Record<string, ArgSpec>): Record<st
     if (spec.short) shortMap[spec.short] = norm;
   }
 
+  // Positional args sorted by position index; rest arg (type='rest') collects post-'--' tokens
+  const positionalArgs = Object.entries(argSpecs)
+    .filter(([, s]) => s.position !== undefined)
+    .sort(([, a], [, b]) => (a.position ?? 0) - (b.position ?? 0))
+    .map(([name]) => name.replace(/-/g, '_'));
+  const restArgNorm = Object.entries(argSpecs).find(([, s]) => s.type === 'rest')?.[0]?.replace(/-/g, '_');
+
   const result: Record<string, unknown> = {};
   for (const name of Object.keys(argSpecs)) {
     result[name.replace(/-/g, '_')] = undefined;
   }
 
+  let positionalIndex = 0;
   let i = 0;
   while (i < argv.length) {
     const token = argv[i];
+
+    // '--' separator: remaining tokens go to the rest arg
+    if (token === '--') {
+      if (restArgNorm !== undefined) result[restArgNorm] = argv.slice(i + 1);
+      break;
+    }
 
     if (token.startsWith('--') && token.includes('=')) {
       const eqIdx = token.indexOf('=');
@@ -140,6 +155,12 @@ function parseArgv(argv: string[], argSpecs: Record<string, ArgSpec>): Record<st
         i++;
       }
       continue;
+    }
+
+    // Unrecognized non-flag token: assign to next positional arg
+    if (!token.startsWith('-') && positionalIndex < positionalArgs.length) {
+      result[positionalArgs[positionalIndex]] = token;
+      positionalIndex++;
     }
 
     i++;

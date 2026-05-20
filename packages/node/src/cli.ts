@@ -4,7 +4,10 @@ import * as readline from 'readline';
 import { findConfig } from './finder';
 import { loadRaw } from './loader';
 import { inferScript } from './inference';
-import type { ScriptSpec, ArgSpec } from './models';
+import { parse } from './parser';
+import type { ScriptSpec, ArgSpec, JumpHostConfig } from './models';
+
+const _CLI_CONFIG = path.join(__dirname, 'runspec.toml');
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -39,7 +42,13 @@ export function main(): void {
     process.exit(1);
   }
 
-  commands[command](rest);
+  const result = commands[command](rest);
+  if (result instanceof Promise) {
+    result.catch((err: unknown) => {
+      process.stderr.write(`✗  ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exit(1);
+    });
+  }
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -103,10 +112,105 @@ function cmdLocal(args: string[]): void {
   }
 }
 
-function cmdJump(_args: string[]): void {
-  console.log('✗  runspec jump is not yet implemented in the Node package.');
-  console.log('   Use the Python package (pip install runspec) for SSH execution.');
-  process.exit(1);
+async function cmdJump(args: string[]): Promise<void> {
+  const parsed = parse({ scriptName: 'runspec', argv: ['jump', ...args], configPath: _CLI_CONFIG });
+  const listHosts = Boolean(parsed['list_jump_hosts']);
+  const fmt = String(parsed['format'] ?? 'text');
+
+  if (listHosts) {
+    cmdListJumpHosts(fmt);
+    return;
+  }
+
+  const hostName = parsed['jump_host'] as string | undefined;
+  if (!hostName) {
+    process.stderr.write('✗  A jump host name is required\n');
+    process.stderr.write('   Usage: runspec jump <jump-host> [<tool>] [-- tool-args...]\n');
+    process.stderr.write("   Run 'runspec jump --list-jump-hosts' to see configured jump hosts\n");
+    process.exit(1);
+  }
+
+  const hostCfg = loadJumpHost(hostName);
+  const toolName = parsed['tool'] as string | undefined;
+
+  const { listTools, callTool } = await import('./jump');
+
+  if (!toolName) {
+    const tools = await listTools(hostCfg);
+    if (!tools.length) {
+      console.log(`No tools found on ${hostName}.`);
+      return;
+    }
+    console.log(`Tools on ${hostName}:\n`);
+    for (const tool of tools) {
+      const name = String(tool['name'] ?? '').padEnd(24);
+      const desc = String(tool['description'] ?? '');
+      console.log(`  ${name} ${desc}`);
+    }
+    return;
+  }
+
+  const toolArgv = (parsed['tool_args'] as string[] | undefined) ?? [];
+  await callTool(hostCfg, toolName, toolArgv);
+}
+
+function cmdListJumpHosts(fmt: string): void {
+  let configPath: string;
+  try {
+    ({ configPath } = findConfig(process.cwd()));
+  } catch {
+    process.stderr.write('✗  No runspec.toml found — cannot look up jump hosts\n');
+    process.exit(1);
+  }
+
+  const raw = loadRaw(configPath);
+  const hosts = raw.config.jumpHosts ?? {};
+
+  if (!Object.keys(hosts).length) {
+    console.log('No jump hosts configured.');
+    console.log('Add [config.jump-hosts.<name>] sections to your runspec.toml.');
+    return;
+  }
+
+  const { resolveBinRaw } = require('./jump') as { resolveBinRaw: (h: JumpHostConfig) => string };
+
+  if (fmt === 'json') {
+    const effective = Object.entries(hosts).map(([name, cfg]) => ({
+      name,
+      ...cfg,
+      bin: resolveBinRaw(cfg),
+    }));
+    console.log(JSON.stringify(effective, null, 2));
+    return;
+  }
+
+  console.log('Configured jump hosts:\n');
+  for (const [name, cfg] of Object.entries(hosts)) {
+    const effectiveBin = resolveBinRaw(cfg);
+    console.log(`  ${name.padEnd(20)} ${cfg.host}  (bin: ${effectiveBin})`);
+  }
+}
+
+function loadJumpHost(name: string): JumpHostConfig {
+  let configPath: string;
+  try {
+    ({ configPath } = findConfig(process.cwd()));
+  } catch {
+    process.stderr.write(`✗  No runspec.toml found — cannot look up jump host '${name}'\n`);
+    process.exit(1);
+  }
+
+  const raw = loadRaw(configPath!);
+  const hosts = raw.config.jumpHosts ?? {};
+
+  if (!(name in hosts)) {
+    const available = Object.keys(hosts).join(', ') || '(none)';
+    process.stderr.write(`✗  Jump host '${name}' not found in runspec.toml\n`);
+    process.stderr.write(`   Configured jump hosts: ${available}\n`);
+    process.exit(1);
+  }
+
+  return hosts[name]!;
 }
 
 function cmdServe(_args: string[]): void {

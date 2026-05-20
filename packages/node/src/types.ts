@@ -94,3 +94,4 @@ registerType('bool', coerceBool);
 registerType('flag', coerceFlag);
 registerType('path', coercePath);
 registerType('choice', coerceChoice);
+registerType('rest', (v) => (Array.isArray(v) ? v : []));

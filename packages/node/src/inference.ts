@@ -25,7 +25,10 @@ export function inferArg(raw: ArgSpec): ArgSpec {
     }
   }
 
-  if (result.required === undefined) {
+  if (result.type === 'rest') {
+    if (result.default === undefined || result.default === null) result.default = [];
+    if (result.required === undefined) result.required = false;
+  } else if (result.required === undefined) {
     const hasNoDefault = def === undefined || def === null;
     result.required = hasNoDefault && result.type !== 'flag';
   }
