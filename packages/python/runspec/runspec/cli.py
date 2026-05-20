@@ -267,9 +267,15 @@ def _init_runspec_toml(path: Path, name: str, example: bool = False) -> None:
 
 def _build_example_toml() -> str:
     return (
-        "# `meta = {...}` is a pass-through table for project-defined metadata —\n"
-        "# runspec never interprets it. Use it for unit hints, impact tags, owner,\n"
-        "# runbook URLs, anything your tools or UI want to surface.\n"
+        "# Jump hosts — `runspec jump <alias>` opens SSH+MCP to that host and runs\n"
+        "# a tool there. Add one entry per host. Optional fields: user, port,\n"
+        '# ssh-key, bin (path to the remote runspec binary, defaults to "runspec").\n'
+        "[config.jump-hosts.localhost]\n"
+        'host = "localhost"\n'
+        "\n"
+        "# `meta = {...}` on args is a pass-through table for project-defined\n"
+        "# metadata — runspec never interprets it. Use it for unit hints, impact\n"
+        "# tags, owner, runbook URLs, anything your tools or UI want to surface.\n"
         "\n"
         "[clean]\n"
         'description = "Find and optionally delete stale temporary files in a directory"\n'
