@@ -14,6 +14,13 @@ import sys
 from typing import Any
 
 
+def _resolve_bin(host_cfg: dict[str, Any]) -> str:
+    """Cascade: TOML `bin` → RUNSPEC_JUMP_BIN env var → 'runspec' default."""
+    bin_path = host_cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
+    _validate_bin_path(bin_path)
+    return bin_path
+
+
 def ssh_cmd(host_cfg: dict[str, Any]) -> list[str]:
     """Build the SSH command list to start runspec serve on the remote.
 
@@ -43,9 +50,7 @@ def ssh_cmd(host_cfg: dict[str, Any]) -> list[str]:
     target = f"{host_cfg['user']}@{host}" if host_cfg.get("user") else host
     cmd.append(target)
 
-    bin_path = host_cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
-    _validate_bin_path(bin_path)
-    cmd.append(bin_path)
+    cmd.append(_resolve_bin(host_cfg))
     cmd.append("serve")
     return cmd
 
@@ -97,16 +102,21 @@ def _send(proc: subprocess.Popen[bytes], msg: dict[str, Any]) -> None:
     proc.stdin.flush()
 
 
-def _recv(proc: subprocess.Popen[bytes]) -> dict[str, Any]:
+def _recv(proc: subprocess.Popen[bytes], bin_path: str | None = None) -> dict[str, Any]:
     assert proc.stdout is not None
     line = proc.stdout.readline()
     if not line:
-        _report_remote_failure(proc)
+        _report_remote_failure(proc, bin_path)
     return json.loads(line.decode())  # type: ignore[no-any-return]
 
 
-def _report_remote_failure(proc: subprocess.Popen[bytes]) -> None:
-    """The remote produced no MCP response — figure out why and report cleanly."""
+def _report_remote_failure(proc: subprocess.Popen[bytes], bin_path: str | None = None) -> None:
+    """The remote produced no MCP response — figure out why and report cleanly.
+
+    The diagnosis branches on the shape of `bin_path`:
+      - explicit path ("/" present) → the path likely doesn't exist or isn't executable
+      - bare name ("runspec")        → the binary isn't on the remote shell's PATH
+    """
     try:
         exit_code = proc.wait(timeout=1)
     except subprocess.TimeoutExpired:
@@ -116,13 +126,26 @@ def _report_remote_failure(proc: subprocess.Popen[bytes]) -> None:
         # OpenSSH conventional exit code for connection / authentication failure
         sys.stderr.write("✗  SSH connection failed (see error above for details).\n")
     elif exit_code is not None and exit_code != 0:
-        sys.stderr.write(
-            f"✗  Remote command failed (exit {exit_code}) before the MCP handshake completed.\n"
-            "   Common cause: `runspec` is not on the remote shell's PATH.\n"
-            '   Fix: set `bin = "/full/path/to/runspec"` in [config.jump-hosts.<alias>],\n'
-            "   or export RUNSPEC_JUMP_BIN in your local shell.\n"
-            "   (SSH commands run in a non-login shell and don't source ~/.bashrc / ~/.profile.)\n"
-        )
+        prefix = f"✗  Remote command failed (exit {exit_code}) before the MCP handshake completed.\n"
+        if bin_path and "/" in bin_path:
+            sys.stderr.write(
+                prefix
+                + f"   The path you provided does not exist or is not executable on the remote:\n"
+                f"     {bin_path}\n"
+                "   Verify it on the remote (e.g. `ssh <host> ls -l <path>`).\n"
+                "   Common causes:\n"
+                "     - the venv path differs between local and remote\n"
+                "     - runspec isn't installed in that venv on the remote\n"
+                "     - typo in the bin / RUNSPEC_JUMP_BIN value\n"
+            )
+        else:
+            sys.stderr.write(
+                prefix
+                + f"   `{bin_path or 'runspec'}` is not on the remote shell's PATH.\n"
+                '   Fix: set `bin = "/full/path/to/runspec"` in [config.jump-hosts.<alias>],\n'
+                "   or export RUNSPEC_JUMP_BIN in your local shell.\n"
+                "   (SSH commands run in a non-login shell and don't source ~/.bashrc / ~/.profile.)\n"
+            )
     else:
         sys.stderr.write("✗  Remote MCP server closed stdout unexpectedly\n")
     sys.exit(1)
@@ -134,7 +157,7 @@ def _close(proc: subprocess.Popen[bytes]) -> None:
     proc.wait()
 
 
-def _initialize(proc: subprocess.Popen[bytes]) -> None:
+def _initialize(proc: subprocess.Popen[bytes], bin_path: str | None = None) -> None:
     _send(
         proc,
         {
@@ -148,18 +171,19 @@ def _initialize(proc: subprocess.Popen[bytes]) -> None:
             },
         },
     )
-    _recv(proc)
+    _recv(proc, bin_path)
     # Notification: no id, no response expected
     _send(proc, {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
 
 
 def list_tools(host_cfg: dict[str, Any]) -> list[dict[str, Any]]:
     """List tools available on a jump host via SSH+MCP."""
+    bin_path = _resolve_bin(host_cfg)
     proc = _open_session(host_cfg)
     try:
-        _initialize(proc)
+        _initialize(proc, bin_path)
         _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        resp = _recv(proc)
+        resp = _recv(proc, bin_path)
         return resp.get("result", {}).get("tools", [])  # type: ignore[no-any-return]
     finally:
         _close(proc)
@@ -167,11 +191,12 @@ def list_tools(host_cfg: dict[str, Any]) -> list[dict[str, Any]]:
 
 def call_tool(host_cfg: dict[str, Any], tool_name: str, tool_argv: list[str]) -> None:
     """Call a tool on a jump host via SSH+MCP, streaming text output to stdout."""
+    bin_path = _resolve_bin(host_cfg)
     proc = _open_session(host_cfg)
     try:
-        _initialize(proc)
+        _initialize(proc, bin_path)
         _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        tools_resp = _recv(proc)
+        tools_resp = _recv(proc, bin_path)
         tools = tools_resp.get("result", {}).get("tools", [])
         schema = next((t for t in tools if t["name"] == tool_name), None)
         if schema is None:
@@ -188,7 +213,7 @@ def call_tool(host_cfg: dict[str, Any], tool_name: str, tool_argv: list[str]) ->
                 "params": {"name": tool_name, "arguments": arguments},
             },
         )
-        call_resp = _recv(proc)
+        call_resp = _recv(proc, bin_path)
         if "error" in call_resp:
             sys.stderr.write(f"✗  {call_resp['error'].get('message', 'Remote error')}\n")
             sys.exit(1)

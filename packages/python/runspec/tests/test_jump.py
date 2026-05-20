@@ -299,8 +299,36 @@ class _FakeProc:
         return self._exit_code
 
 
-def test_report_remote_failure_command_not_found(capsys: pytest.CaptureFixture[str]) -> None:
-    """exit 127 (or any non-255 non-zero) is the typical PATH-resolution failure."""
+def test_report_remote_failure_bare_name_blames_path(capsys: pytest.CaptureFixture[str]) -> None:
+    """exit 127 with bare-name `bin` → 'not on remote PATH' message."""
+    from runspec.jump import _report_remote_failure
+
+    with pytest.raises(SystemExit) as exc:
+        _report_remote_failure(_FakeProc(exit_code=127), bin_path="runspec")
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "exit 127" in err
+    assert "PATH" in err
+    assert "RUNSPEC_JUMP_BIN" in err
+
+
+def test_report_remote_failure_absolute_path_blames_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
+    """exit 127 with explicit `/path/to/runspec` → 'path does not exist' message."""
+    from runspec.jump import _report_remote_failure
+
+    with pytest.raises(SystemExit) as exc:
+        _report_remote_failure(_FakeProc(exit_code=127), bin_path="/nonexistent/.venv/bin/runspec")
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "exit 127" in err
+    assert "/nonexistent/.venv/bin/runspec" in err
+    assert "does not exist" in err
+    # PATH-specific hint should NOT be in the absolute-path branch
+    assert "remote shell's PATH" not in err
+
+
+def test_report_remote_failure_no_bin_path_falls_back_to_path_branch(capsys: pytest.CaptureFixture[str]) -> None:
+    """When bin_path isn't threaded through, default to the PATH-branch wording."""
     from runspec.jump import _report_remote_failure
 
     with pytest.raises(SystemExit) as exc:
@@ -309,8 +337,6 @@ def test_report_remote_failure_command_not_found(capsys: pytest.CaptureFixture[s
     err = capsys.readouterr().err
     assert "exit 127" in err
     assert "PATH" in err
-    assert "bin" in err
-    assert "RUNSPEC_JUMP_BIN" in err
 
 
 def test_report_remote_failure_ssh_connection(capsys: pytest.CaptureFixture[str]) -> None:
