@@ -242,9 +242,53 @@ class TestParseArgvHappyPath:
         result = _parse_argv(["-v"], {"verbose": {"type": "flag", "short": "-v"}})
         assert result == {"verbose": True}
 
-    def test_unknown_token_skipped(self):
-        result = _parse_argv(["positional", "--env", "prod"], {"env": {"type": "str"}})
-        assert result == {"env": "prod"}
+    def test_unknown_flag_exits_cleanly(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv(["--unknown"], {"env": {"type": "str"}})
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "Unknown argument" in out
+        assert "--unknown" in out
+
+    def test_unknown_key_equals_value_exits_cleanly(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv(["--unknown=foo"], {"env": {"type": "str"}})
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "--unknown" in out
+
+    def test_extra_positional_exits_cleanly(self, capsys):
+        # spec only has one positional; passing two errors on the extra
+        spec = {"target": {"type": "str", "position": 1}}
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv(["foo", "bar"], spec)
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "Unknown argument" in out
+        assert "bar" in out
+
+    def test_unknown_with_no_positionals_exits_cleanly(self, capsys):
+        # No positionals declared at all — bare token is an error
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv(["bareword", "--env", "prod"], {"env": {"type": "str"}})
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "bareword" in out
+
+    def test_unknown_after_separator_with_no_rest_arg(self, capsys):
+        # `--` used but no rest arg declared — trailing tokens are errors
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv(["--env", "prod", "--", "foo", "bar"], {"env": {"type": "str"}})
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "foo" in out or "bar" in out
+
+    def test_error_lists_valid_flags(self, capsys):
+        with pytest.raises(SystemExit):
+            _parse_argv(["--xyz"], {"env": {"type": "str"}, "verbose": {"type": "flag"}})
+        out = capsys.readouterr().out
+        assert "--env" in out
+        assert "--verbose" in out
 
     def test_absent_arg_is_none(self):
         result = _parse_argv([], {"env": {"type": "str"}})

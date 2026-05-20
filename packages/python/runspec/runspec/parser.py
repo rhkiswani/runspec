@@ -306,6 +306,8 @@ def _parse_argv(
 
     result: dict[str, Any] = {name.replace("-", "_"): None for name in arg_specs}
 
+    unknown: list[str] = []  # collected unrecognised tokens, reported as one error at the end
+
     # Split on `--` for rest pass-through
     if "--" in argv:
         sep_idx = argv.index("--")
@@ -313,6 +315,11 @@ def _parse_argv(
         argv = argv[:sep_idx]
         if rest_name is not None:
             result[rest_name] = rest_tokens
+        else:
+            # `--` was used but no `rest` arg is declared — the trailing tokens
+            # have no home. Surface them so typos like `serve --dev` aren't
+            # silently dropped.
+            unknown.extend(rest_tokens)
 
     positional_idx = 0
     i = 0
@@ -325,6 +332,8 @@ def _parse_argv(
             norm = name_map.get(key)
             if norm:
                 result[norm] = _append_or_set(result.get(norm), value, arg_specs.get(norm.replace("_", "-"), arg_specs.get(norm, {})))
+            else:
+                unknown.append(key)
             i += 1
             continue
 
@@ -350,15 +359,31 @@ def _parse_argv(
                 sys.exit(1)
             continue
 
+        # Unknown flag — token starts with `-` but didn't match name_map or short_map
+        if token.startswith("-"):
+            unknown.append(token)
+            i += 1
+            continue
+
         # Positional — non-flag token assigned to next available positional spec
-        if not token.startswith("-") and positional_idx < len(positionals):
+        if positional_idx < len(positionals):
             _, pos_name, _ = positionals[positional_idx]
             result[pos_name] = token
             positional_idx += 1
             i += 1
             continue
 
+        # No positional slot left — extra positional token is also unknown
+        unknown.append(token)
         i += 1
+
+    if unknown:
+        valid_flags = sorted({f for f in name_map if f.startswith("--")})
+        hint = f"\n   Valid options: {', '.join(valid_flags)}" if valid_flags else ""
+        joined = ", ".join(unknown)
+        plural = "argument" if len(unknown) == 1 else "arguments"
+        print(f"✗  Unknown {plural}: {joined}{hint}")
+        sys.exit(1)
 
     return result
 
