@@ -44,6 +44,7 @@ class Arg:
     autonomy: str | None = None
     ui: str | None = None
     meta: dict[str, Any] | None = None
+    position: int | None = None  # positional index (1-based); None = --flag arg
 
     # Resolution metadata
     source: str = "default"  # "cli" | "env" | "config" | "default"

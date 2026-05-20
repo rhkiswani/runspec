@@ -56,7 +56,25 @@ def _normalise_config(raw: dict[str, Any]) -> dict[str, Any]:
         "registry": raw.get("registry"),
         "heartbeat": int(raw.get("heartbeat", 30)),
         "heartbeat_data": list(raw.get("heartbeat_data", [])),
+        "jump_hosts": _normalise_jump_hosts(raw.get("jump-hosts", {})),
     }
+
+
+def _normalise_jump_hosts(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalise [config.jump-hosts.*] sections."""
+    result: dict[str, Any] = {}
+    for alias, cfg in raw.items():
+        if not isinstance(cfg, dict):
+            continue
+        result[alias] = {
+            "name": alias,
+            "host": cfg.get("host", alias),
+            "bin": cfg.get("bin", "runspec"),
+            "user": cfg.get("user"),
+            "port": int(cfg.get("port", 22)),
+            "ssh_key": cfg.get("ssh-key"),
+        }
+    return result
 
 
 def _normalise_runnables(raw: dict[str, Any]) -> dict[str, Any]:
@@ -76,10 +94,41 @@ def _normalise_script(name: str, raw: dict[str, Any]) -> dict[str, Any]:
         "run_as": raw.get("run_as"),
         "become_method": raw.get("become_method", "sudo"),
         "become_flags": raw.get("become_flags"),
+        "examples": _normalise_examples(raw.get("examples", [])),
         "args": _normalise_args(raw.get("args", {})),
         "groups": _normalise_groups(raw.get("groups", {})),
         "commands": {cmd_name: _normalise_script(cmd_name, cmd_data) for cmd_name, cmd_data in raw.get("commands", {}).items()},
     }
+
+
+def _normalise_examples(raw: Any) -> list[dict[str, str]]:
+    """Normalise an examples list. Each entry is a {cmd, description} dict.
+
+    Canonical form is inline TOML tables:
+        examples = [
+          {cmd = "runspec local",             description = "Discover runnables"},
+          {cmd = "runspec local --format mcp", description = "Emit MCP schemas"},
+        ]
+
+    Bare strings are also accepted as a shorthand and treated as
+    {cmd = <string>, description = ""}.
+    """
+    if not isinstance(raw, list):
+        return []
+
+    result: list[dict[str, str]] = []
+    for entry in raw:
+        if isinstance(entry, str):
+            result.append({"cmd": entry, "description": ""})
+        elif isinstance(entry, dict):
+            cmd = entry.get("cmd") or entry.get("command")
+            if not cmd:
+                continue
+            result.append({
+                "cmd": str(cmd),
+                "description": str(entry.get("description", "")),
+            })
+    return result
 
 
 def _normalise_args(raw: dict[str, Any]) -> dict[str, Any]:
@@ -120,6 +169,7 @@ def _normalise_arg(name: str, raw: dict[str, Any]) -> dict[str, Any]:
         "autonomy": raw.get("autonomy"),
         "ui": raw.get("ui"),
         "meta": raw.get("meta"),
+        "position": raw.get("position"),
     }
 
 

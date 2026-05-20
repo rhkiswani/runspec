@@ -1,12 +1,27 @@
 #:schema https://raw.githubusercontent.com/JasonFinestone/runspec/main/schema/runspec.schema.json
 
 [runspec]
-description = "Parse and validate runspec.toml files, discover runnables, and serve them as MCP tools"
+description = "Interface specification for anything runnable"
 autonomy    = "confirm"
+
+examples = [
+  {cmd = "runspec init",                   description = "Scaffold a new runnable in this directory"},
+  {cmd = "runspec local",                  description = "Discover and validate runnables"},
+  {cmd = "runspec serve",                  description = "Start the MCP stdio server"},
+  {cmd = "runspec jump --list-jump-hosts", description = "List configured jump hosts"},
+]
 
 [runspec.commands.init]
 description = "Scaffold a new runnable — creates runspec.toml and a code stub"
 autonomy    = "confirm"
+
+examples = [
+  {cmd = "runspec init",                                description = "Scaffold using current directory name"},
+  {cmd = "runspec init --name deploy",                  description = "Scaffold a runnable called 'deploy'"},
+  {cmd = "runspec init --example",                      description = "Generate worked example (clean + scan)"},
+  {cmd = "runspec init --example --write-project",      description = "Also generate pyproject.toml in parent dir"},
+  {cmd = "runspec init --name myapp --lang typescript", description = "Use TypeScript code stub"},
+]
 
 [runspec.commands.init.args]
 name          = {type = "str",    description = "Runnable name (defaults to package directory name)", required = false}
@@ -20,6 +35,13 @@ description = "List installed runnables or emit their tool schemas"
 autonomy    = "autonomous"
 output      = "json"
 
+examples = [
+  {cmd = "runspec local",                              description = "Discover runnables and validate setup"},
+  {cmd = "runspec local --format mcp",                 description = "Emit MCP tool schemas"},
+  {cmd = "runspec local --format mcp --script deploy", description = "Emit schema for one runnable"},
+  {cmd = "runspec local --format json",                description = "Full spec as JSON"},
+]
+
 [runspec.commands.local.args]
 format = {type = "choice", description = "Output format", options = ["text", "json", "mcp", "openai", "anthropic"], default = "text"}
 script = {type = "str",    description = "Filter output to a single runnable by name", required = false}
@@ -27,6 +49,12 @@ script = {type = "str",    description = "Filter output to a single runnable by 
 [runspec.commands.serve]
 description = "Start an MCP stdio server exposing all installed runnables as tools"
 autonomy    = "confirm"
+
+examples = [
+  {cmd = "runspec serve",                                  description = "Serve installed runnables"},
+  {cmd = "runspec serve --dev",                            description = "Also scan project for runspec.toml files"},
+  {cmd = "runspec serve --registry http://registry:8080",  description = "Heartbeat to registry"},
+]
 
 [runspec.commands.serve.args]
 dev           = {type = "flag", description = "Also discover runnables from runspec.toml files under the project root (development mode)", default = false}
@@ -36,10 +64,18 @@ registry-key  = {type = "str", description = "API key for authenticated registry
 registry-cert = {type = "str", description = "Path to CA certificate for registry TLS verification",      required = false}
 
 [runspec.commands.jump]
-description = "Run a tool on a remote host via SSH, or list available tools"
+description = "List jump hosts, list tools on a jump host, or run a tool via SSH+MCP"
 autonomy    = "confirm"
 
+examples = [
+  {cmd = "runspec jump --list-jump-hosts",             description = "List configured jump hosts"},
+  {cmd = "runspec jump myserver",                      description = "List tools available on myserver"},
+  {cmd = "runspec jump myserver deploy -- --env prod", description = "Run 'deploy' on myserver with --env prod"},
+]
+
 [runspec.commands.jump.args]
-tool              = {type = "str",    description = "Name of the tool to run (omit to list available tools)", required = false}
-host              = {type = "str",    description = "SSH hostname to run the tool on",                        required = false}
-format            = {type = "choice", description = "Output format when listing tools", options = ["text", "json"], default = "text"}
+list-jump-hosts = {type = "flag",   description = "List configured jump hosts from runspec.toml", default = false}
+format          = {type = "choice", description = "Output format when listing", options = ["text", "json"], default = "text"}
+jump-host       = {type = "str",    description = "Jump host alias from [config.jump-hosts]",  position = 1, required = false}
+tool            = {type = "str",    description = "Tool to run on the jump host",              position = 2, required = false}
+tool-args       = {type = "rest",   description = "Args passed to the remote tool"}

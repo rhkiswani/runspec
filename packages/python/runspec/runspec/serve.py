@@ -404,8 +404,6 @@ def _handle_tools_call(
     tool_arg_specs = arg_specs.get(name, {})
     argv = _args_to_argv(arguments, tool_arg_specs)
 
-    from runspec.run import _args_to_runspec_env
-
     runspec_env = _args_to_runspec_env(arguments, tool_arg_specs)
     env = {**os.environ, "RUNSPEC_AGENT": "1", **runspec_env}
 
@@ -585,3 +583,33 @@ def _server_name(config: dict[str, Any]) -> str:
 def _write(response: dict[str, Any]) -> None:
     sys.stdout.write(json.dumps(response) + "\n")
     sys.stdout.flush()
+
+
+def _arg_name_to_env_key(name: str) -> str:
+    """Convert an arg name to its RUNSPEC_* environment variable key."""
+    return "RUNSPEC_" + name.upper().replace("-", "_")
+
+
+def _args_to_runspec_env(arguments: dict[str, Any], arg_specs: dict[str, Any]) -> dict[str, str]:
+    """Convert a resolved arguments dict to RUNSPEC_* environment variables."""
+    env_vars: dict[str, str] = {}
+    for arg_name, spec in arg_specs.items():
+        value = arguments.get(arg_name)
+        if value is None:
+            value = arguments.get(arg_name.replace("-", "_"))
+        if value is None:
+            value = spec.get("default")
+        if value is None:
+            continue
+
+        env_key = _arg_name_to_env_key(arg_name)
+        arg_type = spec.get("type", "str")
+
+        if arg_type in ("bool", "flag"):
+            env_vars[env_key] = "1" if value else "0"
+        elif spec.get("multiple") and isinstance(value, list):
+            env_vars[env_key] = "\n".join(str(v) for v in value)
+        else:
+            env_vars[env_key] = str(value)
+
+    return env_vars

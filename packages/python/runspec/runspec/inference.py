@@ -46,6 +46,14 @@ def infer_arg(raw: dict[str, Any]) -> dict[str, Any]:
             # No default and no type — will be caught by required inference
             result["type"] = "str"
 
+    # ── rest type: empty list default, never required ─────────────────────────
+    if result["type"] == "rest":
+        if default is None:
+            result["default"] = []
+            default = []
+        if result.get("required") is None:
+            result["required"] = False
+
     # ── Required inference ────────────────────────────────────────────────────
     if result.get("required") is None:
         # Explicitly no default = required

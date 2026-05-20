@@ -70,6 +70,20 @@ class TestRequiredInference:
         assert result["required"] is False
 
 
+class TestRestTypeInference:
+    def test_rest_defaults_to_empty_list(self):
+        result = infer_arg({"name": "extra", "type": "rest"})
+        assert result["default"] == []
+
+    def test_rest_never_required(self):
+        result = infer_arg({"name": "extra", "type": "rest"})
+        assert result["required"] is False
+
+    def test_rest_with_explicit_default_preserved(self):
+        result = infer_arg({"name": "extra", "type": "rest", "default": ["foo"]})
+        assert result["default"] == ["foo"]
+
+
 class TestChoiceValidation:
     def test_choice_without_options_raises(self):
         with pytest.raises(ValueError, match="no 'options' list"):

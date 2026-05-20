@@ -115,6 +115,68 @@ input = {type = "path"}
         assert "input" in commands["run"]["args"]
 
 
+class TestExamplesNormalisation:
+    def test_examples_inline_table_form(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text("""
+[greet]
+examples = [
+  {cmd = "greet --name Jason", description = "Greet Jason"},
+  {cmd = "greet"},
+]
+""")
+        result = load_raw(p)
+        examples = result["runnables"]["greet"]["examples"]
+        assert examples == [
+            {"cmd": "greet --name Jason", "description": "Greet Jason"},
+            {"cmd": "greet", "description": ""},
+        ]
+
+    def test_examples_bare_string_shorthand(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text("""
+[greet]
+examples = ["greet", "greet --name Jason"]
+""")
+        result = load_raw(p)
+        examples = result["runnables"]["greet"]["examples"]
+        assert examples == [
+            {"cmd": "greet", "description": ""},
+            {"cmd": "greet --name Jason", "description": ""},
+        ]
+
+    def test_examples_default_empty(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text('[greet]\ndescription = "no examples here"\n')
+        result = load_raw(p)
+        assert result["runnables"]["greet"]["examples"] == []
+
+    def test_examples_dict_without_cmd_skipped(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text("""
+[greet]
+examples = [
+  {description = "missing cmd field"},
+  {cmd = "greet"},
+]
+""")
+        result = load_raw(p)
+        examples = result["runnables"]["greet"]["examples"]
+        assert examples == [{"cmd": "greet", "description": ""}]
+
+    def test_examples_on_subcommand(self, tmp_path):
+        p = tmp_path / "runspec.toml"
+        p.write_text("""
+[pipeline]
+
+[pipeline.commands.run]
+examples = [{cmd = "pipeline run"}]
+""")
+        result = load_raw(p)
+        cmd = result["runnables"]["pipeline"]["commands"]["run"]
+        assert cmd["examples"] == [{"cmd": "pipeline run", "description": ""}]
+
+
 class TestArgNormalisation:
     def test_bare_value_shorthand_expanded(self, tmp_path):
         p = tmp_path / "runspec.toml"

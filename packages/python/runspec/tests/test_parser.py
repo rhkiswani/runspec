@@ -73,6 +73,134 @@ class TestParseCleanErrors:
         assert result.name == "hello"
 
 
+class TestPrintHelp:
+    """Tests for the spec-driven --help renderer."""
+
+    def test_help_renders_args_and_examples(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [greet]
+                description = "Greet someone"
+                examples = [
+                  {cmd = "greet --name Jason", description = "Greet Jason"},
+                  {cmd = "greet"},
+                ]
+                [greet.args]
+                name = {type = "str", description = "Person to greet", required = true}
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="greet", argv=["--help"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "Usage: greet" in out
+        assert "Greet someone" in out
+        assert "--name" in out
+        assert "Person to greet" in out
+        assert "Examples:" in out
+        assert "greet --name Jason" in out
+        assert "# Greet Jason" in out
+
+    def test_help_renders_commands_section(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [pipeline]
+                description = "Run a pipeline"
+                examples = [{cmd = "pipeline run", description = "Run it"}]
+                [pipeline.commands.run]
+                description = "Run the pipeline"
+                [pipeline.commands.validate]
+                description = "Validate without running"
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="pipeline", argv=["--help"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "Usage: pipeline <command>" in out
+        assert "Commands:" in out
+        assert "run" in out
+        assert "Run the pipeline" in out
+        assert "validate" in out
+        assert "Validate without running" in out
+        assert "Run 'pipeline <command> --help'" in out
+
+    def test_help_for_subcommand_shows_subcommand_name(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [pipeline]
+                [pipeline.commands.run]
+                description = "Run the pipeline"
+                [pipeline.commands.run.args]
+                input = {type = "path"}
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="pipeline", argv=["run", "--help"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "Usage: pipeline run" in out
+        assert "--input" in out
+
+    def test_help_renders_positionals_and_rest(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [jump]
+                description = "Jump to a remote"
+                [jump.args]
+                fmt        = {type = "choice", description = "Format", options = ["text", "json"], default = "text"}
+                host       = {type = "str",  description = "Target host", position = 1, required = false}
+                tool       = {type = "str",  description = "Tool to run", position = 2, required = false}
+                extra-args = {type = "rest", description = "Args passed to the tool"}
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="jump", argv=["--help"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+
+        # Usage line should show positionals as <name> and rest as [-- <name>...]
+        assert "[<host>]" in out
+        assert "[<tool>]" in out
+        assert "[-- <extra-args>...]" in out
+
+        # Should have a Positional arguments section
+        assert "Positional arguments:" in out
+        assert "<host>" in out
+        assert "Target host" in out
+        assert "-- <extra-args>..." in out
+        assert "Args passed to the tool" in out
+
+        # When positionals exist, flag header is "Options:" not "Arguments:"
+        assert "Options:" in out
+        assert "\nArguments:\n" not in out
+
+    def test_help_without_examples_omits_section(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [greet]
+                description = "no examples"
+                [greet.args]
+                name = {type = "str", default = "world"}
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="greet", argv=["--help"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "Examples:" not in out
+
+
 class TestParseArgvHappyPath:
     def test_string_arg(self):
         result = _parse_argv(["--env", "prod"], {"env": {"type": "str"}})

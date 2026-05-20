@@ -127,6 +127,15 @@ def _coerce_choice(value: Any, arg: dict[str, Any]) -> str:
     return coerced
 
 
+def _coerce_rest(value: Any, arg: dict[str, Any]) -> list[str]:
+    """Pass-through args (everything after `--`). Always a list of strings."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    return [str(value)]
+
+
 def _check_range(value: int | float, arg: dict[str, Any]) -> None:
     """Validate a numeric value is within the declared range."""
     range_ = arg.get("range")
@@ -144,3 +153,4 @@ register_type("bool", _coerce_bool)
 register_type("flag", _coerce_flag)
 register_type("path", _coerce_path)
 register_type("choice", _coerce_choice)
+register_type("rest", _coerce_rest)

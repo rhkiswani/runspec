@@ -137,10 +137,22 @@ def _print_help(name: str, script: dict[str, Any], command: str | None) -> None:
     full_name = f"{name} {command}" if command else name
     description = script.get("description") or ""
     args = script.get("args", {})
+    commands = script.get("commands", {})
+    examples = script.get("examples", [])
 
-    # Build usage line
+    # Partition args into positionals, rest, and flags
+    positional_args = sorted(
+        ((spec["position"], arg_name, spec) for arg_name, spec in args.items() if spec.get("position") is not None),
+        key=lambda p: p[0],
+    )
+    rest_args = [(arg_name, spec) for arg_name, spec in args.items() if spec.get("type") == "rest"]
+    flag_args = [(arg_name, spec) for arg_name, spec in args.items() if spec.get("position") is None and spec.get("type") != "rest"]
+
+    # ── Usage line ────────────────────────────────────────────────────────────
     usage_parts = [full_name]
-    for arg_name, spec in args.items():
+    if commands:
+        usage_parts.append("<command>")
+    for arg_name, spec in flag_args:
         flag = f"--{arg_name}"
         if spec.get("type") == "flag":
             usage_parts.append(f"[{flag}]")
@@ -148,14 +160,48 @@ def _print_help(name: str, script: dict[str, Any], command: str | None) -> None:
             usage_parts.append(f"{flag} <{spec.get('type', 'str')}>")
         else:
             usage_parts.append(f"[{flag} <{spec.get('type', 'str')}>]")
+    for _, arg_name, spec in positional_args:
+        if spec.get("required"):
+            usage_parts.append(f"<{arg_name}>")
+        else:
+            usage_parts.append(f"[<{arg_name}>]")
+    for arg_name, _ in rest_args:
+        usage_parts.append(f"[-- <{arg_name}>...]")
 
     print(f"Usage: {' '.join(usage_parts)}")
     if description:
         print(f"\n{description}")
 
-    if args:
-        print("\nArguments:")
-        for arg_name, spec in args.items():
+    # ── Commands ──────────────────────────────────────────────────────────────
+    if commands:
+        print("\nCommands:")
+        cmd_col = max(len(c) for c in commands) + 2
+        for cmd_name, cmd_spec in commands.items():
+            cmd_desc = cmd_spec.get("description") or ""
+            print(f"  {cmd_name:<{cmd_col}} {cmd_desc}")
+
+    # ── Positional arguments ──────────────────────────────────────────────────
+    if positional_args or rest_args:
+        print("\nPositional arguments:")
+        for _, arg_name, spec in positional_args:
+            label = f"  <{arg_name}>"
+            parts = [spec.get("type", "str")]
+            if spec.get("required"):
+                parts.append("required")
+            elif spec.get("default") is not None:
+                parts.append(f"default: {spec['default']}")
+            desc = spec.get("description") or ""
+            print(f"{label:<24} {desc}  ({', '.join(parts)})" if desc else f"{label:<24} ({', '.join(parts)})")
+        for arg_name, spec in rest_args:
+            label = f"  -- <{arg_name}>..."
+            desc = spec.get("description") or ""
+            print(f"{label:<24} {desc}  (rest)" if desc else f"{label:<24} (rest)")
+
+    # ── Options ───────────────────────────────────────────────────────────────
+    if flag_args:
+        header = "Options:" if (positional_args or rest_args) else "Arguments:"
+        print(f"\n{header}")
+        for arg_name, spec in flag_args:
             flag = f"  --{arg_name}"
             arg_type = spec.get("type", "str")
             parts = []
@@ -174,13 +220,30 @@ def _print_help(name: str, script: dict[str, Any], command: str | None) -> None:
             else:
                 print(f"{flag:<24} ({', '.join(parts)})")
 
+    # ── Autonomy ──────────────────────────────────────────────────────────────
     autonomy = script.get("autonomy")
     if autonomy:
         print(f"\nAutonomy: {autonomy}")
         if script.get("autonomy_reason"):
             print(f"  {script['autonomy_reason']}")
 
-    print("\n  -h, --help    Show this message and exit")
+    # ── Examples ──────────────────────────────────────────────────────────────
+    if examples:
+        print("\nExamples:")
+        ex_col = max(len(e["cmd"]) for e in examples) + 2
+        for ex in examples:
+            cmd_str = ex["cmd"]
+            desc = ex.get("description") or ""
+            if desc:
+                print(f"  {cmd_str:<{ex_col}} # {desc}")
+            else:
+                print(f"  {cmd_str}")
+
+    # ── Trailer ───────────────────────────────────────────────────────────────
+    if commands:
+        print(f"\nRun '{full_name} <command> --help' for focused help on a command.")
+    else:
+        print("\n  -h, --help    Show this message and exit")
 
 
 def _infer_from_argv() -> str:
@@ -215,19 +278,43 @@ def _parse_argv(
     """
     Parse argv into a raw dict of {arg_name: value | None}.
     Handles --flag, --key value, --key=value, -short, and multiple values.
+
+    Positional args (those with `position = N` in the spec) consume non-flag
+    tokens in declaration order. A `rest` type arg captures everything after
+    a literal `--` separator as a list.
     """
-    # Build lookup maps
+    # Build lookup maps and identify positional + rest args
     name_map: dict[str, str] = {}  # --flag-name → normalised_name
     short_map: dict[str, str] = {}  # -v → normalised_name
+    positionals: list[tuple[int, str, dict[str, Any]]] = []  # (position, norm_name, spec)
+    rest_name: str | None = None
+
     for name, spec in arg_specs.items():
         normalised = name.replace("-", "_")
+        if spec.get("type") == "rest":
+            rest_name = normalised
+            continue
+        if spec.get("position") is not None:
+            positionals.append((spec["position"], normalised, spec))
+            continue
         name_map[f"--{name}"] = normalised
         name_map[f"--{normalised}"] = normalised
         if spec.get("short"):
             short_map[spec["short"]] = normalised
 
+    positionals.sort(key=lambda p: p[0])
+
     result: dict[str, Any] = {name.replace("-", "_"): None for name in arg_specs}
 
+    # Split on `--` for rest pass-through
+    if "--" in argv:
+        sep_idx = argv.index("--")
+        rest_tokens = argv[sep_idx + 1 :]
+        argv = argv[:sep_idx]
+        if rest_name is not None:
+            result[rest_name] = rest_tokens
+
+    positional_idx = 0
     i = 0
     while i < len(argv):
         token = argv[i]
@@ -261,6 +348,14 @@ def _parse_argv(
                 hint = f" Expected one of: {', '.join(str(o) for o in options)}" if options else ""
                 print(f"✗  --{norm.replace('_', '-')} requires a value.{hint}")
                 sys.exit(1)
+            continue
+
+        # Positional — non-flag token assigned to next available positional spec
+        if not token.startswith("-") and positional_idx < len(positionals):
+            _, pos_name, _ = positionals[positional_idx]
+            result[pos_name] = token
+            positional_idx += 1
+            i += 1
             continue
 
         i += 1
@@ -389,6 +484,7 @@ def _build_runspec(
             autonomy=spec.get("autonomy"),
             ui=spec.get("ui"),
             meta=spec.get("meta"),
+            position=spec.get("position"),
             source=source,
         )
         runspec._set_arg(arg_name, arg)

@@ -50,6 +50,18 @@ class TestBuiltinCoercers:
         with pytest.raises(ValueError):
             coerce("xml", spec)
 
+    def test_rest_passes_list_through(self):
+        spec = {"type": "rest", "name": "extra"}
+        assert coerce(["--foo", "bar"], spec) == ["--foo", "bar"]
+
+    def test_rest_none_becomes_empty_list(self):
+        spec = {"type": "rest", "name": "extra"}
+        assert coerce(None, spec) == []
+
+    def test_rest_coerces_items_to_strings(self):
+        spec = {"type": "rest", "name": "extra"}
+        assert coerce([1, "two", 3.5], spec) == ["1", "two", "3.5"]
+
 
 class TestRangeValidation:
     def test_int_within_range(self):

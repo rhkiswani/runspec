@@ -83,7 +83,25 @@ hosts           = ["host1", "host2"]                      # optional, see Remote
 run_as          = "username"                              # optional, see Remote Execution
 become_method   = "sudo"                                  # optional, default "sudo"
 become_flags    = "-H"                                    # optional
+examples        = [...]                                   # optional, see Examples
 ```
+
+### `examples`
+
+A list of usage examples rendered by `--help`. Canonical form is inline TOML
+tables with `cmd` (required) and `description` (optional):
+
+```toml
+[mytool]
+examples = [
+  {cmd = "mytool",                description = "Run with defaults"},
+  {cmd = "mytool --verbose",      description = "Show debug output"},
+  {cmd = "mytool --input data.csv"},
+]
+```
+
+Bare strings are accepted as shorthand for `{cmd = <string>}`. Examples are
+declarative; the spec layer never executes them.
 
 ### `output`
 
@@ -261,6 +279,41 @@ description = "Controls output quality. Values below 60 rarely useful."
 | `autonomy` | string | Per-arg autonomy override. Escalates if more restrictive. |
 | `ui` | string | Form control hint. Inferred from type if omitted. |
 | `meta` | table | Developer-defined metadata. Pass-through — runspec never interprets the contents. |
+| `position` | int | 1-based positional index. Makes the arg positional rather than a `--flag`. |
+
+### Positional Arguments
+
+Args with `position = N` are populated from non-flag tokens in declaration
+order rather than via `--name`. Positions are 1-based and must be unique
+within a runnable.
+
+```toml
+[deploy.args]
+target  = {type = "str", description = "Target host", position = 1}
+release = {type = "str", description = "Release tag", position = 2, required = false}
+```
+
+```bash
+deploy prod v1.2.3       # target=prod, release=v1.2.3
+deploy prod              # target=prod, release=None
+```
+
+### Pass-through Arguments (`type = "rest"`)
+
+A single arg with `type = "rest"` captures everything after a literal `--`
+token as a list of strings. Used to forward args to a wrapped command.
+
+```toml
+[wrap.args]
+extra = {type = "rest", description = "Args passed to the wrapped command"}
+```
+
+```bash
+wrap -- --foo bar --baz       # extra = ["--foo", "bar", "--baz"]
+wrap                           # extra = []
+```
+
+`rest`-type args are never required and default to `[]`.
 
 ---
 
@@ -291,6 +344,7 @@ Implementations must apply these rules in order:
 | `flag` | Boolean switch — presence means true |
 | `path` | File system path |
 | `choice` | One of a declared set of options |
+| `rest` | List of strings captured after a literal `--` separator. At most one per runnable. |
 
 Language packs may register additional types via the type registry.
 

@@ -5,7 +5,7 @@ Commands:
     runspec init    [--name <name>] [--lang python|typescript|javascript] [--example]
     runspec local   [--format text|json|mcp|openai|anthropic] [--script <name>]
     runspec serve   [--dev] [--registry <url>] [--name <name>] ...
-    runspec jump    [<tool>] [--host <host>] [--registry <url>] [-- tool-args...]
+    runspec jump    [--list-jump-hosts] [<jump_host> [<tool>] [-- tool-args...]]
 """
 
 from __future__ import annotations
@@ -15,14 +15,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
+_CLI_CONFIG = Path(__file__).parent / "runspec.toml"
+
 
 def main() -> None:
     """Entry point for the runspec CLI binary."""
     args = sys.argv[1:]
 
+    # Top-level --help, -h, or no args → dogfood our own runspec.toml
     if not args or args[0] in ("-h", "--help"):
-        _print_help()
-        return
+        from runspec.parser import parse as _parse
+
+        _parse(script_name="runspec", argv=["--help"], config_path=_CLI_CONFIG)
+        return  # _print_help exits 0
 
     command = args[0]
     rest = args[1:]
@@ -39,27 +44,16 @@ def main() -> None:
         print(f"   Available commands: {', '.join(commands)}")
         sys.exit(1)
 
-    if command == "jump":
-        # jump manages its own -- split for tool pass-through args
-        commands[command](rest)
-        return
-
-    # For init/local/serve: pre-split on -- so pass-through args don't pollute parsing
-    cli_args = rest[: rest.index("--")] if "--" in rest else rest
-
-    if "-h" in cli_args or "--help" in cli_args:
-        _print_command_help(command)
-        return
-
-    commands[command](cli_args)
+    # Each handler is responsible for parsing its own args.
+    # --help is intercepted inside parse() (parser.py) via the spec.
+    commands[command](rest)
 
 
 def cmd_local(args: list[str]) -> None:
     """List discovered runnables with inline validation, or emit schemas."""
     from runspec.parser import parse as _parse
 
-    _cli_config = Path(__file__).parent / "runspec.toml"
-    parsed = _parse(script_name="runspec", argv=["local"] + args, config_path=_cli_config)
+    parsed = _parse(script_name="runspec", argv=["local"] + args, config_path=_CLI_CONFIG)
 
     fmt = str(parsed.format)
     script_filter: str | None = parsed.script.value
@@ -96,8 +90,7 @@ def cmd_serve(args: list[str]) -> None:
     from runspec.parser import parse as _parse
     from runspec.serve import serve
 
-    _cli_config = Path(__file__).parent / "runspec.toml"
-    parsed = _parse(script_name="runspec", argv=["serve"] + args, config_path=_cli_config)
+    parsed = _parse(script_name="runspec", argv=["serve"] + args, config_path=_CLI_CONFIG)
     serve(
         registry_url=parsed.registry.value,
         name=parsed.name.value,
@@ -108,105 +101,107 @@ def cmd_serve(args: list[str]) -> None:
 
 
 def cmd_jump(args: list[str]) -> None:
-    """List or run tools on a jump box via SSH."""
-    from runspec.run import list_registry_tools, run_remote
+    """List jump hosts, list tools on a jump host, or run a tool via SSH+MCP."""
+    from runspec.parser import parse as _parse
 
-    if "--" in args:
-        sep = args.index("--")
-        runspec_args = args[:sep]
-        tool_args = args[sep + 1 :]
-    else:
-        runspec_args = args
-        tool_args = []
+    parsed = _parse(script_name="runspec", argv=["jump"] + args, config_path=_CLI_CONFIG)
 
-    host = _get_flag(runspec_args, "--host")
-    registry = _get_flag(runspec_args, "--registry")
-    registry_key = _get_flag(runspec_args, "--registry-key")
-    registry_cert = _get_flag(runspec_args, "--registry-cert")
-    ssh_user = _get_flag(runspec_args, "--user")
-    ssh_key = _get_flag(runspec_args, "--ssh-key")
-    no_host_key_check = "--no-host-key-check" in runspec_args
-    fmt = _get_flag(runspec_args, "--format", default="text")
+    fmt = str(parsed.format)
 
-    tool_name = next((a for a in runspec_args if not a.startswith("-")), None)
+    if bool(parsed.list_jump_hosts):
+        _cmd_list_jump_hosts(fmt)
+        return
+
+    jump_host_name: str | None = parsed.jump_host.value
+    if jump_host_name is None:
+        print("✗  A jump host name is required")
+        print("   Usage: runspec jump <jump-host> [<tool>] [-- tool-args...]")
+        print("   Run 'runspec jump --list-jump-hosts' to see configured jump hosts")
+        sys.exit(1)
+
+    host_cfg = _load_jump_host(jump_host_name)
+
+    tool_name: str | None = parsed.tool.value
+    tool_argv: list[str] = parsed.tool_args.value or []
 
     if tool_name is None:
-        # No tool name — list available tools from registry
-        if not registry:
-            # Try local config for registry URL
-            from runspec.finder import find_config
-            from runspec.loader import load_raw
+        from runspec.jump import list_tools
 
-            try:
-                config_path = find_config(Path.cwd())
-                raw = load_raw(config_path)
-                registry = raw["config"].get("registry")
-            except FileNotFoundError:
-                pass
-
-        if not registry:
-            print("✗  --registry <url> is required to list jump box tools")
-            print("   Or set [config] registry in your runspec.toml")
-            sys.exit(1)
-
-        tools = list_registry_tools(registry, api_key=registry_key, cert=registry_cert)
+        tools = list_tools(host_cfg)
         if not tools:
-            print("No tools found in registry.")
+            print(f"No tools found on {jump_host_name}.")
             return
-
         if fmt == "json":
             print(json.dumps(tools, indent=2))
             return
-
-        print(f"Tools available via {registry}:\n")
+        print(f"Tools on {jump_host_name}:\n")
         for t in tools:
-            hosts_str = ", ".join(t.get("hosts", []))
             desc = t.get("description") or ""
             print(f"  {t['name']:<24} {desc}")
-            if hosts_str:
-                print(f"  {'':24} hosts: {hosts_str}")
         return
 
-    if not host:
-        print("✗  --host <host> is required to run on a jump box")
+    from runspec.jump import call_tool
+
+    call_tool(host_cfg, tool_name, tool_argv)
+
+
+def _cmd_list_jump_hosts(fmt: str) -> None:
+    """List configured jump hosts from the nearest runspec.toml."""
+    from runspec.finder import find_config
+    from runspec.loader import load_raw
+
+    try:
+        config_path = find_config(Path.cwd())
+        raw = load_raw(config_path)
+        jump_hosts = raw["config"].get("jump_hosts", {})
+    except FileNotFoundError:
+        jump_hosts = {}
+
+    if not jump_hosts:
+        print("No jump hosts configured.")
+        print("Add [config.jump-hosts.<name>] sections to your runspec.toml.")
+        return
+
+    if fmt == "json":
+        print(json.dumps(list(jump_hosts.values()), indent=2, default=str))
+        return
+
+    print("Configured jump hosts:\n")
+    for alias, cfg in jump_hosts.items():
+        host = cfg.get("host", alias)
+        user = cfg.get("user")
+        bin_path = cfg.get("bin", "runspec")
+        target = f"{user}@{host}" if user else host
+        print(f"  {alias:<20} {target}  bin={bin_path}")
+
+
+def _load_jump_host(name: str) -> dict[str, Any]:
+    """Load a jump host config by alias from the nearest runspec.toml."""
+    from runspec.finder import find_config
+    from runspec.loader import load_raw
+
+    try:
+        config_path = find_config(Path.cwd())
+    except FileNotFoundError:
+        print(f"✗  No runspec.toml found — cannot look up jump host '{name}'")
         sys.exit(1)
 
-    effective_registry = registry
-    if not effective_registry:
-        from runspec.finder import find_config
-        from runspec.loader import load_raw
-
-        try:
-            config_path = find_config(Path.cwd())
-            raw = load_raw(config_path)
-            effective_registry = raw["config"].get("registry")
-        except FileNotFoundError:
-            pass
-
-    if not effective_registry:
-        print("✗  --registry is required for jump box execution (or set [config] registry in runspec.toml)")
+    raw = load_raw(config_path)
+    jump_hosts = raw["config"].get("jump_hosts", {})
+    if name not in jump_hosts:
+        available = ", ".join(jump_hosts.keys()) or "(none)"
+        print(f"✗  Jump host '{name}' not configured")
+        print(f"   Configured jump hosts: {available}")
         sys.exit(1)
 
-    rc = run_remote(
-        tool_name,
-        tool_args,
-        host=host,
-        registry_url=effective_registry,
-        ssh_user=ssh_user,
-        ssh_key=ssh_key,
-        no_host_key_check=no_host_key_check,
-        api_key=registry_key,
-        cert=registry_cert,
-    )
-    sys.exit(rc)
+    return jump_hosts[name]  # type: ignore[no-any-return]
 
 
 def cmd_init(args: list[str]) -> None:
     """Scaffold a new runnable — config and code stub."""
     from runspec.parser import parse as _parse
 
-    _cli_config = Path(__file__).parent / "runspec.toml"
-    parsed = _parse(script_name="runspec", argv=["init"] + args, config_path=_cli_config)
+    parsed = _parse(script_name="runspec", argv=["init"] + args, config_path=_CLI_CONFIG)
 
     name_flag: str | None = parsed.name.value
     lang_flag = str(parsed.lang)
@@ -831,165 +826,4 @@ def _print_local_text(discovered: list[dict[str, Any]]) -> None:
         sys.exit(1)
 
 
-# ── Arg parsing helpers ───────────────────────────────────────────────────────
 
-
-def _get_flag(args: list[str], flag: str, default: str | None = None) -> str | None:
-    """Extract a --flag value from args list."""
-    try:
-        idx = args.index(flag)
-        return args[idx + 1]
-    except (ValueError, IndexError):
-        return default
-
-
-def _print_command_help(command: str) -> None:
-    help_text = {
-        "init": """\
-runspec init — scaffold a new runnable (config and code stub)
-
-Usage:
-  runspec init [options]
-
-Options:
-  --name           Runnable name (default: current directory name, or 'clean' with --example)
-  --lang           Language for code stub: python (default), typescript, javascript
-  --example        Generate two working runnables: clean (confirm) and scan (autonomous)
-  --write-project  Generate pyproject.toml and __init__.py one level up (inside your package dir).
-                   Supply an explicit path to override: --write-project /path/to/project
-
-Examples:
-  runspec init
-  runspec init --name deploy
-  runspec init --example
-  runspec init --example --write-project
-  runspec init --name myapp --lang typescript
-  runspec init --write-project /path/to/project
-""",
-        "local": """\
-runspec local — discover and validate runnables in this environment
-
-Usage:
-  runspec local [options]
-
-Options:
-  --format    Output format: text (default), json, mcp, openai, anthropic
-  --script    Target a single runnable by name (use with --format)
-
-Examples:
-  runspec local                                  # discover runnables + validate
-  runspec local --format mcp                     # emit MCP tool schemas
-  runspec local --format mcp --script deploy     # emit schema for one runnable
-  runspec local --format json                    # full spec as JSON
-""",
-        "serve": """\
-runspec serve — start the MCP stdio server for this environment
-
-Usage:
-  runspec serve [options]
-
-Options:
-  --dev            Development mode: scan under the nearest .git root
-  --registry       Registry base URL (overrides [config] registry)
-  --name           Instance name reported to registry
-  --registry-key   API key for registry write endpoints
-  --registry-cert  CA certificate bundle path for HTTPS registry
-
-Examples:
-  runspec serve
-  runspec serve --dev
-  runspec serve --registry http://registry:8080
-""",
-        "jump": """\
-runspec jump — list or run tools on a jump box via SSH
-
-Usage:
-  runspec jump [<tool> --host <host>] [options] [-- tool-args...]
-
-Options:
-  <tool>               Tool name (omit to list available tools from registry)
-  --host <host>        Jump box to run on
-  --registry <url>     Registry base URL
-  --registry-key <k>   API key for registry read endpoints
-  --registry-cert <f>  CA certificate bundle for HTTPS registry
-  --user <user>        SSH username
-  --ssh-key <file>     Path to SSH private key
-  --no-host-key-check  Skip SSH host key verification (insecure)
-  --format             text (default) or json — listing mode only
-  --                   Separator: everything after is passed to the tool
-
-Examples:
-  runspec jump                                                         # list tools
-  runspec jump --registry http://registry:8080                        # list from registry
-  runspec jump deploy --host jumpbox-01 -- --env prod
-  runspec jump deploy --host jumpbox-01 --user deploy --ssh-key ~/.ssh/id_deploy -- --env prod
-""",
-    }
-    if command in help_text:
-        print(help_text[command])
-    else:
-        _print_help()
-
-
-def _print_help() -> None:
-    print("""\
-runspec — interface specification for anything runnable
-
-Usage:
-  runspec <command> [options]
-
-Commands:
-  init        Scaffold a new runnable — config and code stub
-  local       Discover and validate runnables in this environment
-  serve       Start the MCP stdio server for local runnables
-  jump        List or run tools on a jump box via SSH
-
-Options for init:
-  --name           Runnable name (default: current directory name, or 'clean' with --example)
-  --lang           Language for code stub: python (default), typescript, javascript
-  --example        Generate two working runnables: clean (confirm) and scan (autonomous)
-  --write-project  Generate pyproject.toml and __init__.py one level up (inside your package dir).
-                   Supply an explicit path to override: --write-project /path/to/project
-
-Options for local:
-  --format    Output format: text (default), json, mcp, openai, anthropic
-  --script    Target a single runnable by name (use with --format)
-
-Options for serve:
-  --dev            Development mode: scan under the nearest .git root
-  --registry       Registry base URL (overrides [config] registry)
-  --name           Instance name reported to registry
-  --registry-key   API key for registry write endpoints
-  --registry-cert  CA certificate bundle path for HTTPS registry
-
-Options for jump:
-  <tool>               Tool name (omit to list available tools from registry)
-  --host <host>        Jump box to run on
-  --registry <url>     Registry base URL
-  --registry-key <k>   API key for registry read endpoints
-  --registry-cert <f>  CA certificate bundle for HTTPS registry
-  --user <user>        SSH username
-  --ssh-key <file>     Path to SSH private key
-  --no-host-key-check  Skip SSH host key verification (insecure)
-  --format             text (default) or json — listing mode only
-  --                   Separator: everything after is passed to the tool
-
-Examples:
-  runspec init
-  runspec init --example
-  runspec init --example --write-project
-  runspec init --name myapp --lang typescript
-  runspec init --write-project /path/to/project
-  runspec local                                  # discover runnables + validate
-  runspec local --format mcp                     # emit MCP tool schemas
-  runspec local --format mcp --script deploy     # emit schema for one runnable
-  runspec serve
-  runspec serve --dev
-  runspec serve --registry http://registry:8080
-  runspec jump                                   # list tools from registry
-  runspec jump --registry http://registry:8080
-  runspec jump deploy --host jumpbox-01 -- --env prod
-  runspec jump deploy --host jumpbox-01 --user deploy --ssh-key ~/.ssh/id_deploy -- --env prod
-
-Run 'runspec <command> --help' for focused help on a specific command.
-""")
