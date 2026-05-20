@@ -302,6 +302,38 @@ description = "Controls output quality. Values below 60 rarely useful."
 | `meta` | table | Developer-defined metadata. Pass-through — runspec never interprets the contents. |
 | `position` | int | 1-based positional index. Makes the arg positional rather than a `--flag`. |
 
+### Default Values for Argument Fields
+
+What you actually get when a field is omitted. Two layers of defaulting are
+applied: the **loader** normalises the raw TOML into a uniform dict, then
+**inference** fills in derived fields (`type`, `required`) based on the
+fields that *are* present.
+
+| Field | If omitted, you get | Notes |
+|---|---|---|
+| `type` | inferred from `default`'s Python type → bool→`flag`, int→`int`, float→`float`, str→`str`; or from `options` → `choice`; final fallback `str` | Inference rules table earlier in this document. |
+| `default` | `None` (except `rest` type, which defaults to `[]`) | |
+| `required` | `True` if no `default` and `type` is not `flag` or `rest`; `True` if `type = "path"` and no `default`; `False` otherwise | This is what makes `name = {type = "str"}` a required arg with no default. To make it optional, set `required = false` or give it a `default`. |
+| `description` | `None` | Recommended in practice — agents lean on this. |
+| `options` | `None` | Setting this also infers `type = "choice"`. |
+| `range` | `None` | |
+| `multiple` | `False` | |
+| `delimiter` | `None` | When set, a single value is `.split(delimiter)`. |
+| `short` | `None` | |
+| `env` | `None` | When set, the named env var is checked before the spec default. |
+| `deprecated` | `None` | Set to a string message; shown on use. |
+| `autonomy` | inherits `[config] autonomy-default` (which itself defaults to `"confirm"`) | Per-arg overrides escalate the runnable's effective autonomy if more restrictive. |
+| `ui` | derived from `type` at render time (text/number/checkbox/dropdown/etc.) | See "Form Control Inference". |
+| `meta` | `None` | Pass-through — runspec never reads it. |
+| `position` | `None` (i.e. the arg is a `--flag`, not a positional) | 1-based when set. |
+
+The two non-obvious defaults to remember:
+
+1. **No `default` → `required = true`** for everything except `flag` and `rest` types.
+2. **`type = "path"` is always required unless given a `default`** — paths almost never have a sensible fallback.
+
+These defaults are not configurable at the `[config]` level. The single project-wide arg-related setting is `[config] autonomy-default`, which only affects the autonomy inheritance rule above. Keeping the other defaults stable across projects is intentional: it makes any `runspec.toml` predictable to read.
+
 ### Positional Arguments
 
 Args with `position = N` are populated from non-flag tokens in declaration
