@@ -223,10 +223,21 @@ def cmd_init(args: list[str]) -> None:
     example = bool(parsed.example)
     write_project = bool(parsed.write_project)
     project_dir_arg: str | None = parsed.project_dir.value
+    force = bool(parsed.force)
 
     cwd = Path.cwd()
     pkg_name = _sanitize_name(cwd.name)
     runspec_toml = cwd / "runspec.toml"
+
+    # Safety check: runspec.toml belongs *inside* a package directory, not at
+    # the project root. If cwd already has a pyproject.toml, the developer is
+    # almost certainly in the wrong place. --force opts out.
+    if (cwd / "pyproject.toml").exists() and not force:
+        print(f"✗  {cwd}/pyproject.toml already exists.")
+        print("   `runspec init` scaffolds inside a package directory, not at the project root.")
+        print("   cd into your package directory first (e.g. `cd mypackage/` then re-run).")
+        print("   Use --force to scaffold here anyway.")
+        sys.exit(1)
 
     if example:
         if name_flag:

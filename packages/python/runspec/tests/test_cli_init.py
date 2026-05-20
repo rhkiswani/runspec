@@ -60,6 +60,39 @@ def test_creates_runspec_toml_default_name(tmp_path, monkeypatch):
     assert f"[{name}]" in toml.read_text()
 
 
+# ── safety check: refuse if cwd already has pyproject.toml ───────────────────
+
+
+def test_refuses_when_cwd_has_pyproject(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'existing'\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as exc:
+        cmd_init(["--name", "greeter"])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "pyproject.toml" in out
+    assert "--force" in out
+    # And no runspec.toml was created
+    assert not (tmp_path / "runspec.toml").exists()
+
+
+def test_force_overrides_pyproject_check(tmp_path, monkeypatch):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'existing'\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    cmd_init(["--name", "greeter", "--force"])
+    assert (tmp_path / "runspec.toml").exists()
+    assert "[greeter]" in (tmp_path / "runspec.toml").read_text()
+
+
+def test_no_pyproject_no_check(tmp_path, monkeypatch):
+    # Sanity: with no pyproject.toml, init proceeds without --force
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--name", "greeter"])
+    assert (tmp_path / "runspec.toml").exists()
+
+
 # ── idempotency — refuse if already initialized ──────────────────────────────
 
 

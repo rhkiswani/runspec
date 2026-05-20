@@ -35,6 +35,7 @@ lang          = {type = "choice", description = "Language for the generated code
 example       = {type = "flag",   description = "Generate a worked example (clean + scan runnables)", short = "-e", default = false}
 write-project = {type = "flag",   description = "Generate pyproject.toml, __init__.py, .gitignore, and CLAUDE.md", short = "-w", default = false}
 project-dir   = {type = "str",    description = "Where to write project files (default: parent directory)", short = "-d", required = false}
+force         = {type = "flag",   description = "Override the cwd safety check (don't refuse when pyproject.toml is present in cwd)", default = false}
 
 [runspec.commands.local]
 description = "List installed runnables or emit their tool schemas"
