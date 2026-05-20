@@ -107,11 +107,11 @@ test('--example creates clean.ts and scan.ts by default', () => {
   expect(fs.existsSync(path.join(dir, 'scan.ts'))).toBe(true);
 });
 
-test('--example clean stub uses __agent__ check', () => {
+test('--example clean stub uses __runspec_agent__ check', () => {
   const dir = tmpDir();
   runInit(dir, ['--example']);
   const ts = fs.readFileSync(path.join(dir, 'clean.ts'), 'utf-8');
-  expect(ts).toContain('__agent__');
+  expect(ts).toContain('__runspec_agent__');
   expect(ts).toContain('delete');
 });
 

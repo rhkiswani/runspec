@@ -33,17 +33,17 @@ export function parse(opts: ParseOptions = {}): ParsedArgs {
 
   let argv = argvOverride ?? process.argv.slice(2);
   let activeScript = rawScript;
-  let activeCommand: string | undefined;
+  let commandPath: string[] = [];
 
   const commands = rawScript.commands ?? {};
   if (Object.keys(commands).length > 0 && argv.length > 0 && argv[0] in commands) {
-    activeCommand = argv[0];
+    commandPath = [argv[0]];
     activeScript = commands[argv[0]];
     argv = argv.slice(1);
   }
 
   if (argv.includes('--help') || argv.includes('-h')) {
-    printHelp(name, activeScript, activeCommand);
+    printHelp(name, activeScript, commandPath.length > 0 ? commandPath[commandPath.length - 1] : undefined);
     process.exit(0);
   }
 
@@ -66,12 +66,14 @@ export function parse(opts: ParseOptions = {}): ParsedArgs {
 
   return {
     ...coercedValues,
-    __agent__: agent,
-    __script__: name,
-    __command__: activeCommand,
-    __autonomy__: autonomy,
-    __source__: configPath,
-    __spec__: activeScript,
+    __runspec_agent__: agent,
+    __runspec_script__: name,
+    __runspec_command_path__: commandPath,
+    __runspec_autonomy__: autonomy,
+    __runspec_source__: configPath,
+    __runspec_spec__: activeScript,
+    get runspec_command() { return commandPath.length > 0 ? commandPath[commandPath.length - 1] : undefined; },
+    get runspec_command_path() { return commandPath; },
   } as ParsedArgs;
 }
 

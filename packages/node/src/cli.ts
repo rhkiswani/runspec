@@ -241,7 +241,7 @@ function initRunspecToml(filePath: string, name: string): void {
     console.log(`   Edit ${path.basename(filePath)} directly to add more runnables.`);
     process.exit(1);
   }
-  const content = `[${name}]\ndescription = "Describe what ${name} does"\nautonomy    = "confirm"\n\n[${name}.args]\n# example = {type = "str", description = "An example argument"}\n`;
+  const content = `#:schema https://raw.githubusercontent.com/JasonFinestone/runspec/main/schema/runspec.schema.json\n\n[${name}]\ndescription = "Describe what ${name} does"\nautonomy    = "confirm"\n\n[${name}.args]\n# example = {type = "str", description = "An example argument"}\n`;
   writeAndVerify(filePath, content, null);
   console.log(`  ✓  Created runspec.toml with [${name}] runnable`);
 }
@@ -253,6 +253,8 @@ function initExampleToml(filePath: string): void {
     process.exit(1);
   }
   const content = [
+    '#:schema https://raw.githubusercontent.com/JasonFinestone/runspec/main/schema/runspec.schema.json',
+    '',
     '[clean]',
     'description = "Find and optionally delete stale temporary files in a directory"',
     'autonomy    = "confirm"',
@@ -395,7 +397,7 @@ async function main(): Promise<void> {
   }
 
   if (args.delete) {
-    if (!args.__agent__) {
+    if (!args.__runspec_agent__) {
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const answer = await new Promise<string>((resolve) => rl.question(\`\\nDelete \${matches.length} file(s)? [y/N] \`, resolve));
       rl.close();
@@ -465,7 +467,7 @@ async function main() {
   }
 
   if (args.delete) {
-    if (!args.__agent__) {
+    if (!args.__runspec_agent__) {
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       const answer = await new Promise((resolve) => rl.question(\`\\nDelete \${matches.length} file(s)? [y/N] \`, resolve));
       rl.close();
@@ -528,7 +530,7 @@ def main():
             print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
     if args.delete:
-        if not args.__agent__:
+        if not args.__runspec_agent__:
             print()
             confirm = input(f"Delete {len(matches)} file(s)? [y/N] ")
             if confirm.strip().lower() != "y":

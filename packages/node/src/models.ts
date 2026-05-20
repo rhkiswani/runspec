@@ -51,10 +51,12 @@ export interface RawSpec {
 
 export interface ParsedArgs {
   [key: string]: unknown;
-  readonly __agent__: boolean;
-  readonly __script__: string;
-  readonly __command__: string | undefined;
-  readonly __autonomy__: string;
-  readonly __source__: string;
-  readonly __spec__: ScriptSpec;
+  readonly __runspec_agent__: boolean;
+  readonly __runspec_script__: string;
+  readonly __runspec_command_path__: string[];
+  readonly __runspec_autonomy__: string;
+  readonly __runspec_source__: string;
+  readonly __runspec_spec__: ScriptSpec;
+  readonly runspec_command: string | undefined;
+  readonly runspec_command_path: string[];
 }
