@@ -298,6 +298,37 @@ The SSH process becomes the pipe. JSON-RPC messages flow through the SSH tunnel 
 - **Tool discovery is automatic** — `runspec serve` on the remote host knows its own tools
 - **No registry needed** — for known, stable hosts the SSH config is the inventory
 - **Named venvs = server identity** — the venv name becomes the MCP server name, enabling multiple distinct tool sets on one machine
+- **stderr is a free streaming side-channel** — see below
+
+### `runspec jump` — same transport, single-shot
+
+For one-off invocations from a human or a subprocess agent (e.g. Claude Code in a terminal), `runspec jump` is the CLI-side counterpart to the MCP host config above. It spawns SSH as a subprocess, runs `runspec serve` on the remote, completes the MCP handshake (`initialize` → `notifications/initialized` → `tools/list` → `tools/call`), and returns the result.
+
+```bash
+runspec jump prod-box deploy -- --env prod
+```
+
+Internally that is just `subprocess.Popen(["ssh", "user@prod-box", "runspec", "serve"], stdin=PIPE, stdout=PIPE, stderr=sys.stderr)` with JSON-RPC messages flowing over stdin/stdout. The persistent MCP host config and `runspec jump` share the same transport — `jump` is the synchronous one-shot version.
+
+### Streaming via the stderr side-channel
+
+MCP `tools/call` is a single-request/single-response protocol — a long-running tool blocks until it returns one final result. But the SSH transport opens a second channel for free: **stderr**.
+
+`runspec jump` spawns SSH with `stderr=sys.stderr` (the local user's terminal). Anything the remote `runspec serve` — or the tool it runs — writes to stderr flows back over SSH and surfaces in real time on the local terminal, while stdout carries the structured JSON-RPC response.
+
+```
+                  ┌─────────────────────────────┐
+local stdin ──────▶ JSON-RPC requests ──────────▶ runspec serve
+                  │                             │
+local stdout ◀────┤ JSON-RPC responses ◀────────┤
+                  │                             │
+local stderr ◀════╪═ live progress lines ◀══════╪═  tool's stderr
+                  └─────────────────────────────┘
+```
+
+This means a tool that prints `Processing record 47/100…` to stderr gives the user (or agent) a live progress feed while the MCP host waits for the final structured result on stdout. The MCP protocol doesn't know about the streaming; it just sees the final response. For Chainlit-style apps that wrap `langchain-mcp-adapters`, the same stderr channel can be captured and surfaced to the UI for live progress messages.
+
+It's not true response streaming (the structured result still arrives all at once at the end), but it solves the most common UX problem: "did my tool hang, or is it still working?"
 
 ### Deployment model
 

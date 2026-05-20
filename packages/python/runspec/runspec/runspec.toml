@@ -1,8 +1,13 @@
 #:schema https://raw.githubusercontent.com/JasonFinestone/runspec/main/schema/runspec.schema.json
 
+# runspec itself is a developer CLI, not an agent tool. Suppress autonomy
+# inference so --help doesn't display a meaningless autonomy level on the
+# top-level menu or on `serve` (which is a server, not an action).
+[config]
+autonomy-default = ""
+
 [runspec]
 description = "Interface specification for anything runnable"
-autonomy    = "confirm"
 
 examples = [
   {cmd = "runspec init",                   description = "Scaffold a new runnable in this directory"},
@@ -49,7 +54,6 @@ script = {type = "str",    description = "Filter output to a single runnable by 
 
 [runspec.commands.serve]
 description = "Start an MCP stdio server exposing all installed runnables as tools"
-autonomy    = "confirm"
 
 examples = [
   {cmd = "runspec serve", description = "Serve all runspec-aware runnables installed in this venv"},
