@@ -479,3 +479,78 @@ def test_list_jump_hosts_json_toml_bin_overrides_env(tmp_path: Any, monkeypatch:
     _cmd_list_jump_hosts("json")
     parsed = _json.loads(capsys.readouterr().out)
     assert parsed[0]["bin"] == "/toml/runspec"
+
+
+# ── call_tool propagates isError to its own exit code ────────────────────────
+
+
+def test_call_tool_exits_nonzero_when_isError(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """When the remote tool reports isError=true, runspec jump exits 1."""
+    from runspec import jump as jump_mod
+
+    host_cfg = {"host": "h", "bin": "runspec", "user": None, "port": 22, "ssh_key": None}
+
+    # Three MCP responses come back in order: tools/list, then tools/call
+    responses = iter(
+        [
+            {"jsonrpc": "2.0", "id": 1, "result": {}},  # initialize
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": {"tools": [{"name": "broken", "inputSchema": {"type": "object", "properties": {}}}]},
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "result": {
+                    "content": [{"type": "text", "text": "exit_code: 1\nstderr: it failed"}],
+                    "isError": True,
+                },
+            },
+        ]
+    )
+
+    monkeypatch.setattr(jump_mod, "_open_session", lambda cfg: _FakeProc(exit_code=None))
+    monkeypatch.setattr(jump_mod, "_send", lambda proc, msg: None)
+    monkeypatch.setattr(jump_mod, "_recv", lambda proc, bin_path=None: next(responses))
+    monkeypatch.setattr(jump_mod, "_close", lambda proc: None)
+
+    with pytest.raises(SystemExit) as exc:
+        jump_mod.call_tool(host_cfg, "broken", [])
+    assert exc.value.code == 1
+    # The structured exit_code block still appears in stdout for the user / MCP client
+    assert "exit_code: 1" in capsys.readouterr().out
+
+
+def test_call_tool_exits_zero_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Successful tool call → no isError → jump exits 0."""
+    from runspec import jump as jump_mod
+
+    host_cfg = {"host": "h", "bin": "runspec", "user": None, "port": 22, "ssh_key": None}
+
+    responses = iter(
+        [
+            {"jsonrpc": "2.0", "id": 1, "result": {}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": {"tools": [{"name": "ok", "inputSchema": {"type": "object", "properties": {}}}]},
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "result": {
+                    "content": [{"type": "text", "text": "all good"}],
+                    "isError": False,
+                },
+            },
+        ]
+    )
+
+    monkeypatch.setattr(jump_mod, "_open_session", lambda cfg: _FakeProc(exit_code=None))
+    monkeypatch.setattr(jump_mod, "_send", lambda proc, msg: None)
+    monkeypatch.setattr(jump_mod, "_recv", lambda proc, bin_path=None: next(responses))
+    monkeypatch.setattr(jump_mod, "_close", lambda proc: None)
+
+    # Should not raise SystemExit
+    jump_mod.call_tool(host_cfg, "ok", [])

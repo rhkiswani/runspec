@@ -226,12 +226,20 @@ def call_tool(host_cfg: dict[str, Any], tool_name: str, tool_argv: list[str]) ->
         if "error" in call_resp:
             sys.stderr.write(f"✗  {call_resp['error'].get('message', 'Remote error')}\n")
             sys.exit(1)
-        for block in call_resp.get("result", {}).get("content", []):
+        result = call_resp.get("result", {})
+        for block in result.get("content", []):
             if block.get("type") == "text":
                 text = block["text"]
                 sys.stdout.write(text)
                 if not text.endswith("\n"):
                     sys.stdout.write("\n")
+        # Propagate the remote tool's success/failure to our own exit code.
+        # MCP's tools/call sets result.isError=true when the tool failed; the
+        # exit_code / stdout / stderr block is already embedded in `content`
+        # for the user to see, but a wrapping script needs runspec jump itself
+        # to exit non-zero so it can detect the failure.
+        if result.get("isError"):
+            sys.exit(1)
     finally:
         _close(proc)
 
