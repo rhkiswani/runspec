@@ -322,9 +322,10 @@ def _build_example_toml() -> str:
         'output      = "json"\n'
         "\n"
         "[scan.args]\n"
-        'directory  = {type = "path", description = "Directory to scan",                  default = "."}\n'
-        'pattern    = {type = "str",  description = "Glob pattern to match",              default = "*.tmp"}\n'
-        'older_than = {type = "int",  description = "Only match files older than N days", default = 7, meta = {unit = "days"}}\n'
+        'directory  = {type = "path",   description = "Directory to scan",                  default = "."}\n'
+        'pattern    = {type = "str",    description = "Glob pattern to match",              default = "*.tmp"}\n'
+        'older_than = {type = "int",    description = "Only match files older than N days", default = 7, meta = {unit = "days"}}\n'
+        'format     = {type = "choice", description = "Output format", options = ["text", "json"], default = "json"}\n'
     )
 
 
@@ -387,11 +388,21 @@ def main():
     cutoff = time.time() - args.older_than * 86400
     matches = [p for p in args.directory.glob(args.pattern) if p.is_file() and p.stat().st_mtime < cutoff]
 
-    data = [
-        {"path": str(p), "size": p.stat().st_size, "days_old": int((time.time() - p.stat().st_mtime) / 86400)}
-        for p in matches
-    ]
-    print(json.dumps(data, indent=2))
+    if args.format == "json":
+        data = [
+            {"path": str(p), "size": p.stat().st_size, "days_old": int((time.time() - p.stat().st_mtime) / 86400)}
+            for p in matches
+        ]
+        print(json.dumps(data, indent=2))
+    else:
+        if not matches:
+            print(f"No '{args.pattern}' files older than {args.older_than} days found in {args.directory}.")
+            return
+        print(f"Found {len(matches)} file(s) matching '{args.pattern}' older than {args.older_than} days:")
+        print()
+        for p in matches:
+            days = int((time.time() - p.stat().st_mtime) / 86400)
+            print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
 
 if __name__ == "__main__":

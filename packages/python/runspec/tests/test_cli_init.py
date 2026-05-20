@@ -330,7 +330,8 @@ def test_example_toml_has_scan_runnable(tmp_path, monkeypatch):
     assert scan.get("output") == "json"
 
 
-def test_example_toml_scan_has_no_delete_or_format_arg(tmp_path, monkeypatch):
+def test_example_toml_scan_has_no_delete_arg(tmp_path, monkeypatch):
+    """scan is read-only — it never has a --delete flag."""
     monkeypatch.chdir(tmp_path)
     cmd_init(["--example"])
 
@@ -339,7 +340,20 @@ def test_example_toml_scan_has_no_delete_or_format_arg(tmp_path, monkeypatch):
     raw = load_raw(tmp_path / "runspec.toml")
     scan_args = raw["runnables"]["scan"].get("args", {})
     assert "delete" not in scan_args
-    assert "format" not in scan_args
+
+
+def test_example_toml_scan_has_format_arg_defaulting_to_json(tmp_path, monkeypatch):
+    """scan supports --format (text|json); default is json to match output = json."""
+    monkeypatch.chdir(tmp_path)
+    cmd_init(["--example"])
+
+    from runspec.loader import load_raw
+
+    raw = load_raw(tmp_path / "runspec.toml")
+    scan_args = raw["runnables"]["scan"].get("args", {})
+    assert "format" in scan_args
+    assert scan_args["format"]["default"] == "json"
+    assert scan_args["format"]["options"] == ["text", "json"]
 
 
 def test_example_next_steps_shows_demo_prep(tmp_path, monkeypatch, capsys):
