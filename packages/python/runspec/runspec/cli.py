@@ -321,12 +321,11 @@ def main():
             print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
     if args.delete:
-        if args.runspec_autonomy != "autonomous":
-            print()
-            confirm = input(f"Delete {len(matches)} file(s)? [y/N] ")
-            if confirm.strip().lower() != "y":
-                print("Aborted.")
-                return
+        # Agents must declare autonomy='autonomous' to invoke a destructive
+        # action. Human invocation (--delete typed on the CLI) is the human's
+        # explicit confirmation; agents need the equivalent declared in the spec.
+        if args.runspec_agent and args.runspec_autonomy != "autonomous":
+            raise SystemExit("✗ --delete requires autonomy='autonomous' for agent invocation")
         for p in matches:
             p.unlink()
         print()

@@ -126,6 +126,37 @@ Default when unspecified: `"text"`.
 
 Default when unspecified: value of `[config] autonomy-default`, else `"confirm"`.
 
+#### Who autonomy is for
+
+Autonomy is **a contract for agent invocation, not a directive for human users.** A human typing a command at the terminal has already chosen the action by typing it — autonomy doesn't ask them to confirm anything extra. The four levels describe how an MCP host (or other agent runtime) should gate the *agent's* call.
+
+Conforming MCP hosts read the `x-autonomy` field on the tool schema (emitted by `runspec local --format mcp` and by `runspec serve`'s `tools/list`) and gate accordingly:
+
+- `autonomous` — invoke without asking
+- `confirm` — present the planned call to the human, wait for approval
+- `supervised` — invoke, then show the result before the agent acts on it
+- `manual` — never invoke
+
+Hosts that don't honour `x-autonomy` are free to ignore it. The spec does not force any particular gating behaviour at the host layer — that's a quality-of-implementation concern of each MCP host.
+
+#### Tool-side enforcement (recommended for destructive actions)
+
+Because host gating is not universal, runnables that perform destructive actions should also enforce autonomy themselves at runtime. Two properties on the parsed `RunSpec` make this straightforward:
+
+- `args.runspec_agent` — `True` when invoked by an MCP server (`runspec serve` sets `RUNSPEC_AGENT=1` automatically)
+- `args.runspec_autonomy` — the effective autonomy after escalation
+
+The recommended pattern for a destructive flag:
+
+```python
+if args.delete:
+    if args.runspec_agent and args.runspec_autonomy != "autonomous":
+        raise SystemExit("✗ --delete requires autonomy='autonomous' for agent invocation")
+    # ... proceed
+```
+
+This refuses agent invocation of a destructive action unless the runnable's declared autonomy explicitly permits unattended execution. Human invocation is unaffected — a human running the command at a terminal has already chosen the action by passing the flag.
+
 ---
 
 ## Remote Execution
