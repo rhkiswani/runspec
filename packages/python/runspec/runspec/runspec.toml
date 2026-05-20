@@ -30,11 +30,11 @@ examples = [
 ]
 
 [runspec.commands.init.args]
-name          = {type = "str",    description = "Runnable name (defaults to package directory name)", required = false}
+name          = {type = "str",    description = "Runnable name (defaults to package directory name)", short = "-n", required = false}
 lang          = {type = "choice", description = "Language for the generated code stub", options = ["python", "typescript", "javascript"], default = "python"}
-example       = {type = "flag",   description = "Generate a worked example (clean + scan runnables)", default = false}
-write-project = {type = "flag",   description = "Generate pyproject.toml, __init__.py, .gitignore, and CLAUDE.md", default = false}
-project-dir   = {type = "str",    description = "Where to write project files (default: parent directory)", required = false}
+example       = {type = "flag",   description = "Generate a worked example (clean + scan runnables)", short = "-e", default = false}
+write-project = {type = "flag",   description = "Generate pyproject.toml, __init__.py, .gitignore, and CLAUDE.md", short = "-w", default = false}
+project-dir   = {type = "str",    description = "Where to write project files (default: parent directory)", short = "-d", required = false}
 
 [runspec.commands.local]
 description = "List installed runnables or emit their tool schemas"
@@ -49,8 +49,8 @@ examples = [
 ]
 
 [runspec.commands.local.args]
-format   = {type = "choice", description = "Output format", options = ["text", "json", "mcp", "openai", "anthropic"], default = "text"}
-runnable = {type = "str",    description = "Filter output to a single runnable by name", required = false}
+format   = {type = "choice", description = "Output format", options = ["text", "json", "mcp", "openai", "anthropic"], short = "-f", default = "text"}
+runnable = {type = "str",    description = "Filter output to a single runnable by name", short = "-r", required = false}
 
 [runspec.commands.serve]
 description = "Start an MCP stdio server exposing all installed runnables as tools"
@@ -73,8 +73,8 @@ examples = [
 ]
 
 [runspec.commands.jump.args]
-list-jump-hosts = {type = "flag",   description = "List configured jump hosts from runspec.toml", default = false}
-format          = {type = "choice", description = "Output format when listing", options = ["text", "json"], default = "text"}
+list-jump-hosts = {type = "flag",   description = "List configured jump hosts from runspec.toml", short = "-l", default = false}
+format          = {type = "choice", description = "Output format when listing", options = ["text", "json"], short = "-f", default = "text"}
 jump-host       = {type = "str",    description = "Jump host alias from [config.jump-hosts]",  position = 1, required = false}
 tool            = {type = "str",    description = "Tool to run on the jump host",              position = 2, required = false}
 tool-args       = {type = "rest",   description = "Args passed to the remote tool"}
