@@ -98,6 +98,24 @@ Explicit fields (`port`, `ssh-key`) appear in argv before `ssh-options`,
 so on conflict the explicit field wins. If you specify both `port = 2222`
 and `ssh-options = ["Port=99"]`, the connection uses port 2222.
 
+#### Cross-platform notes
+
+`runspec jump` invokes the system `ssh` binary. This works identically on:
+
+- **Linux / macOS** — OpenSSH is the system default.
+- **Windows 10 (1809+) and Windows 11** — built-in OpenSSH Client at
+  `C:\Windows\System32\OpenSSH\ssh.exe`, on PATH by default. The
+  ssh-config lives at `C:\Users\<you>\.ssh\config`. PuTTY / plink /
+  MobaXterm coexist on the same machine but are not used by runspec —
+  the protocol-level requirement is OpenSSH semantics.
+
+If `Get-Command ssh` doesn't find anything on a Windows machine, the
+OpenSSH Client capability is disabled. Enable it (admin) with:
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+```
+
 #### Typical usage patterns
 
 **Rely on ssh-config** — the cleanest setup. Put per-host config in
