@@ -454,7 +454,7 @@ def _build_runspec(
     ]
 
     runspec = RunSpec(
-        __runspec_script__=name,
+        __runspec_runnable__=name,
         __runspec_source__=config_path,
         __runspec_command_path__=command_path,
         __runspec_autonomy__=autonomy,

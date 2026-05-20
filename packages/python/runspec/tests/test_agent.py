@@ -87,7 +87,7 @@ def test_agent_field_on_runspec_model():
 
     from runspec.models import RunSpec
 
-    rs = RunSpec(__runspec_script__="greet", __runspec_source__=Path("/tmp/runspec.toml"))
+    rs = RunSpec(__runspec_runnable__="greet", __runspec_source__=Path("/tmp/runspec.toml"))
     assert rs.__runspec_agent__ is False
 
 
@@ -96,5 +96,5 @@ def test_agent_field_explicit_true():
 
     from runspec.models import RunSpec
 
-    rs = RunSpec(__runspec_script__="greet", __runspec_source__=Path("/tmp/runspec.toml"), __runspec_agent__=True)
+    rs = RunSpec(__runspec_runnable__="greet", __runspec_source__=Path("/tmp/runspec.toml"), __runspec_agent__=True)
     assert rs.__runspec_agent__ is True

@@ -196,7 +196,7 @@ class RunSpec:
     """
 
     # Script identity
-    __runspec_script__: str
+    __runspec_runnable__: str
     __runspec_source__: Path
     __runspec_command_path__: list[str] = field(default_factory=list)  # active subcommand path, deepest last
     __runspec_autonomy__: str = "confirm"  # effective autonomy for this invocation
@@ -213,20 +213,20 @@ class RunSpec:
             args: dict[str, Arg] = object.__getattribute__(self, "_args")
             return args[name]
         except KeyError as err:
-            raise AttributeError(f"No argument '{name}' in spec for '{self.__runspec_script__}'. Available: {', '.join(self._args.keys())}") from err
+            raise AttributeError(f"No argument '{name}' in spec for '{self.__runspec_runnable__}'. Available: {', '.join(self._args.keys())}") from err
 
     def __repr__(self) -> str:
         args_repr = ", ".join(f"{k}={v.value!r}" for k, v in self._args.items())
-        return f"RunSpec(script={self.__runspec_script__!r}, {args_repr})"
+        return f"RunSpec(runnable={self.__runspec_runnable__!r}, {args_repr})"
 
     # ── Public metadata accessors ─────────────────────────────────────────────
     # The dunder fields (__runspec_*__) are the storage; these properties are
     # the developer API. Use `args.runspec_agent` not `args.__runspec_agent__`.
 
     @property
-    def runspec_script(self) -> str:
-        """Name of the runnable being invoked."""
-        return self.__runspec_script__
+    def runspec_runnable(self) -> str:
+        """Name of the runnable being invoked (e.g. the [clean] section in runspec.toml)."""
+        return self.__runspec_runnable__
 
     @property
     def runspec_source(self) -> Path:

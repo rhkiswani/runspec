@@ -292,7 +292,6 @@ def _build_example_toml() -> str:
 
 _EXAMPLE_PYTHON_STUB = """\
 import json
-import sys
 import time
 
 from runspec import parse
@@ -322,7 +321,7 @@ def main():
             print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
     if args.delete:
-        if not args.runspec_agent:
+        if args.runspec_autonomy != "autonomous":
             print()
             confirm = input(f"Delete {len(matches)} file(s)? [y/N] ")
             if confirm.strip().lower() != "y":

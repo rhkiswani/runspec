@@ -242,7 +242,7 @@ class TestRunSpecMetadataProperties:
         from runspec.models import RunSpec
 
         defaults = {
-            "__runspec_script__": "clean",
+            "__runspec_runnable__": "clean",
             "__runspec_source__": Path("/tmp/runspec.toml"),
             "__runspec_command_path__": [],
             "__runspec_autonomy__": "confirm",
@@ -253,9 +253,9 @@ class TestRunSpecMetadataProperties:
         defaults.update(overrides)
         return RunSpec(**defaults)
 
-    def test_runspec_script(self):
+    def test_runspec_runnable(self):
         rs = self._make()
-        assert rs.runspec_script == "clean"
+        assert rs.runspec_runnable == "clean"
 
     def test_runspec_source(self):
         from pathlib import Path
