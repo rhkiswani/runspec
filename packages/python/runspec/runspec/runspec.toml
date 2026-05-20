@@ -52,12 +52,11 @@ description = "Start an MCP stdio server exposing all installed runnables as too
 autonomy    = "confirm"
 
 examples = [
-  {cmd = "runspec serve",       description = "Serve installed runnables"},
-  {cmd = "runspec serve --dev", description = "Also scan project for runspec.toml files"},
+  {cmd = "runspec serve", description = "Serve all runspec-aware runnables installed in this venv"},
 ]
 
-[runspec.commands.serve.args]
-dev = {type = "flag", description = "Also discover runnables from runspec.toml files under the project root (development mode)", default = false}
+# No args — runnables are discovered via importlib.metadata. Install with
+# `pip install -e .` to make a package visible.
 
 [runspec.commands.jump]
 description = "List jump hosts, list tools on a jump host, or run a tool via SSH+MCP"

@@ -340,21 +340,21 @@ def test_server_name_ignores_non_string():
     assert isinstance(name, str)
 
 
-# ── serve(dev=True) ───────────────────────────────────────────────────────────
+# ── serve() — importlib.metadata discovery ────────────────────────────────────
 
 
-def test_serve_dev_exits_when_no_configs_found(capsys):
+def test_serve_exits_when_no_installed_packages(capsys):
     from unittest.mock import patch
 
-    with patch("runspec.finder.find_configs_dev", return_value=[]), pytest.raises(SystemExit) as exc:
-        serve(dev=True)
+    with patch("runspec.cli._discover_installed", return_value=[]), pytest.raises(SystemExit) as exc:
+        serve()
 
     assert exc.value.code == 1
     captured = capsys.readouterr()
-    assert "No runspec.toml" in captured.err
+    assert "no runspec-aware packages" in captured.err
 
 
-def test_serve_dev_warns_on_duplicate_runnable_name(tmp_path, capsys):
+def test_serve_warns_on_duplicate_runnable_name(tmp_path, capsys):
     from unittest.mock import patch
 
     toml1 = tmp_path / "pkg1" / "runspec.toml"
@@ -365,17 +365,22 @@ def test_serve_dev_warns_on_duplicate_runnable_name(tmp_path, capsys):
     toml2.parent.mkdir()
     toml2.write_text("[greet]\ndescription = 'From pkg2'\n", encoding="utf-8")
 
+    discovered = [
+        {"source": str(toml1), "runnable": "greet", "spec": {"description": "From pkg1"}},
+        {"source": str(toml2), "runnable": "greet", "spec": {"description": "From pkg2"}},
+    ]
+
     captured_tools: dict = {}
 
     def fake_mcp_loop(tools, arg_specs, exec_specs, name):
         captured_tools.update(tools)
 
     with (
-        patch("runspec.finder.find_configs_dev", return_value=[toml1, toml2]),
+        patch("runspec.cli._discover_installed", return_value=discovered),
         patch("runspec.serve._mcp_loop", fake_mcp_loop),
         patch("runspec.serve._find_script", return_value=None),
     ):
-        serve(dev=True)
+        serve()
 
     captured = capsys.readouterr()
     assert "warning" in captured.err
@@ -384,7 +389,7 @@ def test_serve_dev_warns_on_duplicate_runnable_name(tmp_path, capsys):
     assert "greet" in captured_tools
 
 
-def test_serve_dev_aggregates_runnables_from_multiple_tomls(tmp_path):
+def test_serve_aggregates_runnables_from_multiple_installed_packages(tmp_path):
     from unittest.mock import patch
 
     toml1 = tmp_path / "pkg1" / "runspec.toml"
@@ -395,17 +400,82 @@ def test_serve_dev_aggregates_runnables_from_multiple_tomls(tmp_path):
     toml2.parent.mkdir()
     toml2.write_text("[deploy]\ndescription = 'Deploy'\n", encoding="utf-8")
 
+    discovered = [
+        {"source": str(toml1), "runnable": "greet", "spec": {"description": "Greet"}},
+        {"source": str(toml2), "runnable": "deploy", "spec": {"description": "Deploy"}},
+    ]
+
     captured_tools: dict = {}
 
     def fake_mcp_loop(tools, arg_specs, exec_specs, name):
         captured_tools.update(tools)
 
     with (
-        patch("runspec.finder.find_configs_dev", return_value=[toml1, toml2]),
+        patch("runspec.cli._discover_installed", return_value=discovered),
         patch("runspec.serve._mcp_loop", fake_mcp_loop),
         patch("runspec.serve._find_script", return_value=None),
     ):
-        serve(dev=True)
+        serve()
 
     assert "greet" in captured_tools
     assert "deploy" in captured_tools
+
+
+def test_serve_single_package_uses_its_config_name(tmp_path):
+    """Single-package venv: the [config] name from the TOML is used for the MCP server."""
+    from unittest.mock import patch
+
+    toml = tmp_path / "pkg" / "runspec.toml"
+    toml.parent.mkdir()
+    toml.write_text("[config]\nname = 'custom-server'\n\n[greet]\ndescription = 'Greet'\n", encoding="utf-8")
+
+    discovered = [
+        {"source": str(toml), "runnable": "greet", "spec": {"description": "Greet"}},
+    ]
+    captured: dict = {}
+
+    def fake_mcp_loop(tools, arg_specs, exec_specs, name):
+        captured["server_name"] = name
+
+    with (
+        patch("runspec.cli._discover_installed", return_value=discovered),
+        patch("runspec.serve._mcp_loop", fake_mcp_loop),
+        patch("runspec.serve._find_script", return_value=None),
+    ):
+        serve()
+
+    assert captured["server_name"] == "custom-server"
+
+
+def test_serve_multi_package_falls_back_to_venv_name(tmp_path):
+    """Multi-package venv: [config] name is ambiguous, so fall back to venv dir name."""
+    from unittest.mock import patch
+
+    toml1 = tmp_path / "pkg1" / "runspec.toml"
+    toml1.parent.mkdir()
+    toml1.write_text("[config]\nname = 'first'\n\n[greet]\n", encoding="utf-8")
+
+    toml2 = tmp_path / "pkg2" / "runspec.toml"
+    toml2.parent.mkdir()
+    toml2.write_text("[config]\nname = 'second'\n\n[deploy]\n", encoding="utf-8")
+
+    discovered = [
+        {"source": str(toml1), "runnable": "greet", "spec": {}},
+        {"source": str(toml2), "runnable": "deploy", "spec": {}},
+    ]
+    captured: dict = {}
+
+    def fake_mcp_loop(tools, arg_specs, exec_specs, name):
+        captured["server_name"] = name
+
+    with (
+        patch("runspec.cli._discover_installed", return_value=discovered),
+        patch("runspec.serve._mcp_loop", fake_mcp_loop),
+        patch("runspec.serve._find_script", return_value=None),
+    ):
+        serve()
+
+    # Should not match either of the two config names — falls back to venv directory
+    assert captured["server_name"] not in ("first", "second")
+    assert isinstance(captured["server_name"], str)
+    assert len(captured["server_name"]) > 0

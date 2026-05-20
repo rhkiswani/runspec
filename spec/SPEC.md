@@ -28,17 +28,13 @@ and `importlib.metadata` can locate it after install — no extra configuration 
 
 Implementations must use the following lookup strategy depending on context:
 
-**Installed packages:**
+**Runnable discovery (`runspec local`, `runspec serve`):**
 1. Locate via `importlib.metadata` — find `runspec.toml` in installed package files
 2. Any package that declares `runspec` as a dependency is a candidate
+3. Packages must be installed (`pip install` or `pip install -e .`) to be visible.
+   There is no filesystem-scanning fallback; install is the convention.
 
-**Local development (`runspec serve --dev`):**
-1. Walk up from cwd until `.git/` is found — that is the project root
-2. Walk down one level from the project root, collect all `runspec.toml` files found
-3. Aggregate all runnables from all found configs into a unified tool list
-4. If no `.git/` found, use cwd as the project root
-
-**Single-package commands (`runspec local`, `runspec jump`):**
+**Local config lookup (`runspec jump` for `[config.jump-hosts]`):**
 1. Walk up from cwd, return the first `runspec.toml` found
 
 ---

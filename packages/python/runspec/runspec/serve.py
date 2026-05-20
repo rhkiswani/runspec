@@ -27,53 +27,55 @@ _ERR_METHOD_NOT_FOUND = -32601
 _ERR_INVALID_PARAMS = -32602
 
 
-def serve(dev: bool = False) -> None:
+def serve() -> None:
     """
     Start the runspec MCP stdio server.
     Reads JSON-RPC requests from stdin, writes responses to stdout.
     Runs until stdin closes.
+
+    Discovers runnables via importlib.metadata — the venv is the source of
+    truth. Packages must be installed (pip install / pip install -e) to be
+    served. Same convention as `runspec local` and `runspec jump`.
     """
-    from runspec.finder import find_config, find_configs_dev
+    from runspec.cli import _deduplicate, _discover_installed
     from runspec.inference import infer_script
     from runspec.loader import load_raw
 
     hostname = socket.gethostname()
     scripts_dir = Path(sysconfig.get_path("scripts"))
 
+    discovered = _deduplicate(_discover_installed())
+    if not discovered:
+        sys.stderr.write("runspec serve: no runspec-aware packages installed in this venv.\n")
+        sys.stderr.write("Install one with: pip install -e <path-to-project>\n")
+        sys.stderr.flush()
+        sys.exit(1)
+
+    # Cache each unique source TOML's [config] so its autonomy-default applies
+    # to that package's own runnables — multi-package venvs are honoured per pkg.
+    configs_by_source: dict[str, dict[str, Any]] = {}
+    for item in discovered:
+        src = item["source"]
+        if src not in configs_by_source:
+            configs_by_source[src] = load_raw(Path(src))["config"]
+
     tools: dict[str, dict[str, Any]] = {}
     arg_specs: dict[str, dict[str, Any]] = {}
     exec_specs: dict[str, dict[str, Any]] = {}
+    seen_runnables: set[str] = set()
 
-    if dev:
-        config_paths = find_configs_dev(Path.cwd())
-        if not config_paths:
-            sys.stderr.write("runspec serve --dev: No runspec.toml files found (looked for them under the nearest .git root)\n")
+    for item in discovered:
+        rname = item["runnable"]
+        runnable = item["spec"]
+        config = configs_by_source[item["source"]]
+
+        # First-wins when the same runnable name appears in two installed packages
+        if rname in seen_runnables:
+            sys.stderr.write(f"runspec serve: warning: '{rname}' defined in multiple installed packages, keeping first\n")
             sys.stderr.flush()
-            sys.exit(1)
+            continue
+        seen_runnables.add(rname)
 
-        config = load_raw(config_paths[0])["config"]
-        all_runnables: dict[str, Any] = {}
-        for cp in config_paths:
-            extra = load_raw(cp)
-            for rname, rdata in extra["runnables"].items():
-                if rname in all_runnables:
-                    sys.stderr.write(f"runspec serve --dev: warning: '{rname}' defined in multiple TOML files, keeping first\n")
-                    sys.stderr.flush()
-                else:
-                    all_runnables[rname] = rdata
-    else:
-        try:
-            config_path = find_config(Path.cwd())
-        except FileNotFoundError as e:
-            sys.stderr.write(f"runspec serve: {e}\n")
-            sys.stderr.flush()
-            sys.exit(1)
-
-        raw = load_raw(config_path)
-        config = raw["config"]
-        all_runnables = raw["runnables"]
-
-    for rname, runnable in all_runnables.items():
         # Skip tools restricted to other hosts
         allowed_hosts = runnable.get("hosts")
         if allowed_hosts and hostname not in allowed_hosts:
@@ -98,7 +100,10 @@ def serve(dev: bool = False) -> None:
             arg_specs[flat_name] = arg_spec
             exec_specs[flat_name] = exec_spec
 
-    _mcp_loop(tools, arg_specs, exec_specs, _server_name(config))
+    # Single-package venvs use that package's [config] name; multi-package
+    # venvs fall back to the venv directory name to avoid arbitrary choice.
+    server_config = next(iter(configs_by_source.values())) if len(configs_by_source) == 1 else {}
+    _mcp_loop(tools, arg_specs, exec_specs, _server_name(server_config))
 
 
 # ── MCP loop ──────────────────────────────────────────────────────────────────
@@ -207,7 +212,7 @@ def _handle_tools_call(
             "jsonrpc": "2.0",
             "id": req_id,
             "result": {
-                "content": [{"type": "text", "text": f"Script '{name}' not found. Install it in the venv (production) or place it alongside runspec.toml (--dev mode)."}],
+                "content": [{"type": "text", "text": f"Script '{name}' not found in the venv. Install it with: pip install -e <path-to-project>"}],
                 "isError": True,
             },
         }

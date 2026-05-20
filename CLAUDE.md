@@ -98,12 +98,12 @@ runspec/
 **Entry points**
 - Entry point name must match the runspec runnable name — enforced by convention
 - `runspec` binary auto-appears when added as a dependency
-- Script discovery: venv bin only (production); venv bin then TOML directory (--dev)
+- Script discovery: venv bin only
 
 **Discovery**
-- Production: importlib.metadata only — installed packages, no filesystem scanning
-- `runspec serve --dev`: walk up to `.git/` as project root, recurse down (skipping `.venv`, `__pycache__`, `node_modules`, etc.) to collect all `runspec.toml` files
-- `.git` is the only project boundary marker — language agnostic
+- `runspec local`, `runspec serve`: importlib.metadata only — installed packages, no filesystem scanning. `pip install -e .` to make a package visible.
+- `runspec jump` walks up from cwd to find `[config.jump-hosts]` only — runnables themselves are not discovered via filesystem.
+- `.git` is the only project boundary marker — language agnostic (used by `runspec init --write-project` to locate the parent directory)
 
 ---
 

@@ -108,18 +108,15 @@ This works with any language and any build system — the entry point mechanism 
 
 `runspec` finds its config depending on the execution context:
 
-**Installed packages (production):**
+**Installed packages — all commands:**
 - `runspec.toml` shipped inside the package directory and located via `importlib.metadata`
 - Works for any installed package that declares `runspec` as a dependency
+- `runspec local` and `runspec serve` use this exclusively — no filesystem scanning, no `--dev` flag
+- Editable installs (`pip install -e .`) are picked up automatically, so monorepos work without extra ceremony
 
-**Local development (`runspec serve --dev`):**
-- Walk up from cwd until `.git/` is found — that is the project root
-- Walk down one level from the project root, collect all `runspec.toml` files found
-- `.git` is the only project boundary marker — language agnostic
-
-**Single-package commands (`runspec run`, `check`, `emit`):**
-- Walk up from cwd until `runspec.toml` is found
-- Works naturally when you are in or below a package directory
+**Walk-up lookup for `[config.jump-hosts]` only:**
+- `runspec jump` walks up from cwd to find the nearest `runspec.toml` for jump-host config
+- This is config lookup, not runnable discovery — runnables for jump always live on the remote, accessed via SSH+MCP
 
 One file per package, multiple runnables within it. No per-runnable sidecar files.
 
