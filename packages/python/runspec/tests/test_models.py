@@ -231,3 +231,70 @@ class TestIndexProtocol:
     def test_getitem_slice(self):
         a = arg([10, 20, 30, 40], type="int")
         assert a[1:3] == [20, 30]
+
+
+class TestRunSpecMetadataProperties:
+    """Public properties mirror the __runspec_*__ dunder fields without the ugly access."""
+
+    def _make(self, **overrides):
+        from pathlib import Path
+
+        from runspec.models import RunSpec
+
+        defaults = {
+            "__runspec_script__": "clean",
+            "__runspec_source__": Path("/tmp/runspec.toml"),
+            "__runspec_command_path__": [],
+            "__runspec_autonomy__": "confirm",
+            "__runspec_agent__": False,
+            "__runspec_spec__": {"description": "test"},
+            "__runspec_groups__": [],
+        }
+        defaults.update(overrides)
+        return RunSpec(**defaults)
+
+    def test_runspec_script(self):
+        rs = self._make()
+        assert rs.runspec_script == "clean"
+
+    def test_runspec_source(self):
+        from pathlib import Path
+
+        rs = self._make(__runspec_source__=Path("/etc/runspec.toml"))
+        assert rs.runspec_source == Path("/etc/runspec.toml")
+
+    def test_runspec_autonomy(self):
+        rs = self._make(__runspec_autonomy__="autonomous")
+        assert rs.runspec_autonomy == "autonomous"
+
+    def test_runspec_agent_false_by_default(self):
+        rs = self._make()
+        assert rs.runspec_agent is False
+
+    def test_runspec_agent_true_under_agent(self):
+        rs = self._make(__runspec_agent__=True)
+        assert rs.runspec_agent is True
+
+    def test_runspec_spec(self):
+        rs = self._make(__runspec_spec__={"description": "Greet"})
+        assert rs.runspec_spec == {"description": "Greet"}
+
+    def test_runspec_groups(self):
+        from runspec.models import Group
+
+        g = Group(name="auth", args=["user", "pass"], inclusive=True)
+        rs = self._make(__runspec_groups__=[g])
+        assert rs.runspec_groups == [g]
+
+    def test_runspec_command_none_when_no_subcommand(self):
+        rs = self._make()
+        assert rs.runspec_command is None
+
+    def test_runspec_command_path_empty_when_no_subcommand(self):
+        rs = self._make()
+        assert rs.runspec_command_path == []
+
+    def test_runspec_command_returns_leaf(self):
+        rs = self._make(__runspec_command_path__=["run", "stage"])
+        assert rs.runspec_command == "stage"
+        assert rs.runspec_command_path == ["run", "stage"]

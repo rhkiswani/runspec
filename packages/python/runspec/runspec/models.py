@@ -219,6 +219,40 @@ class RunSpec:
         args_repr = ", ".join(f"{k}={v.value!r}" for k, v in self._args.items())
         return f"RunSpec(script={self.__runspec_script__!r}, {args_repr})"
 
+    # ── Public metadata accessors ─────────────────────────────────────────────
+    # The dunder fields (__runspec_*__) are the storage; these properties are
+    # the developer API. Use `args.runspec_agent` not `args.__runspec_agent__`.
+
+    @property
+    def runspec_script(self) -> str:
+        """Name of the runnable being invoked."""
+        return self.__runspec_script__
+
+    @property
+    def runspec_source(self) -> Path:
+        """Path to the runspec.toml that defined this runnable."""
+        return self.__runspec_source__
+
+    @property
+    def runspec_autonomy(self) -> str:
+        """Effective autonomy for this invocation (after escalation)."""
+        return self.__runspec_autonomy__
+
+    @property
+    def runspec_agent(self) -> bool:
+        """True when called by an agent (RUNSPEC_AGENT=1 in the environment)."""
+        return self.__runspec_agent__
+
+    @property
+    def runspec_spec(self) -> dict[str, Any]:
+        """The raw, fully-inferred spec dict for the runnable."""
+        return self.__runspec_spec__
+
+    @property
+    def runspec_groups(self) -> list[Group]:
+        """Group constraints declared on this runnable."""
+        return self.__runspec_groups__
+
     @property
     def runspec_command(self) -> str | None:
         """Active subcommand name (leaf), or None if no subcommand was invoked."""

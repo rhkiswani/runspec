@@ -322,7 +322,7 @@ def main():
             print(f"  {p}  ({p.stat().st_size:,} bytes, {days}d old)")
 
     if args.delete:
-        if not args.__runspec_agent__:
+        if not args.runspec_agent:
             print()
             confirm = input(f"Delete {len(matches)} file(s)? [y/N] ")
             if confirm.strip().lower() != "y":
