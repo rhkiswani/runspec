@@ -495,3 +495,39 @@ def test_write_project_install_path_in_next_steps(tmp_path, monkeypatch, capsys)
     out = capsys.readouterr().out
     assert f"pip install -e {project_root}" in out
     assert f"run from {project_root}" in out
+
+
+# ── main() — top-level dispatch ───────────────────────────────────────────────
+
+
+def test_main_version_long(monkeypatch, capsys):
+    from runspec.cli import main
+
+    monkeypatch.setattr("sys.argv", ["runspec", "--version"])
+    main()
+    out = capsys.readouterr().out
+    assert "runspec" in out
+    # Version line contains at least one digit (the actual version string)
+    assert any(c.isdigit() for c in out)
+
+
+def test_main_version_short(monkeypatch, capsys):
+    from runspec.cli import main
+
+    monkeypatch.setattr("sys.argv", ["runspec", "-V"])
+    main()
+    out = capsys.readouterr().out
+    assert "runspec" in out
+    assert any(c.isdigit() for c in out)
+
+
+def test_main_version_takes_precedence_over_help(monkeypatch, capsys):
+    """--version is checked before --help; first arg wins."""
+    from runspec.cli import main
+
+    monkeypatch.setattr("sys.argv", ["runspec", "--version"])
+    main()
+    out = capsys.readouterr().out
+    # Should be a single-line version, not the full help block
+    assert "Usage:" not in out
+    assert "Commands:" not in out

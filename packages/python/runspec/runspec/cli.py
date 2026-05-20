@@ -8,6 +8,10 @@ Commands:
     runspec serve
     runspec jump   [--list-jump-hosts] [<jump_host> [<tool>] [-- tool-args...]]
 
+Top-level options:
+    --version, -V    Print the runspec package version and exit
+    --help,    -h    Show help for runspec or a subcommand
+
 Help text, args, and examples are driven from runspec/runspec.toml — the
 CLI parses --help through parse() against its own bundled spec.
 """
@@ -25,6 +29,17 @@ _CLI_CONFIG = Path(__file__).parent / "runspec.toml"
 def main() -> None:
     """Entry point for the runspec CLI binary."""
     args = sys.argv[1:]
+
+    # Top-level --version / -V
+    if args and args[0] in ("-V", "--version"):
+        from importlib.metadata import PackageNotFoundError
+        from importlib.metadata import version as _pkg_version
+
+        try:
+            print(f"runspec {_pkg_version('runspec')}")
+        except PackageNotFoundError:
+            print("runspec (version unknown)")
+        return
 
     # Top-level --help, -h, or no args → dogfood our own runspec.toml
     if not args or args[0] in ("-h", "--help"):
