@@ -94,8 +94,9 @@ def serve() -> None:
         run_as = _resolve_run_as(runnable.get("run_as"), hostname)
         become_method = runnable.get("become_method", "sudo")
         become_flags = runnable.get("become_flags")
+        config_path = item["source"]  # path to the runspec.toml that defined this runnable
 
-        for flat_name, schema, arg_spec, exec_spec in _expand_tools(rname, inferred, base_cmd, run_as, become_method, become_flags):
+        for flat_name, schema, arg_spec, exec_spec in _expand_tools(rname, inferred, base_cmd, run_as, become_method, become_flags, config_path):
             tools[flat_name] = schema
             arg_specs[flat_name] = arg_spec
             exec_specs[flat_name] = exec_spec
@@ -223,6 +224,13 @@ def _handle_tools_call(
     runspec_env = _args_to_runspec_env(arguments, tool_arg_specs)
     env = {**os.environ, "RUNSPEC_AGENT": "1", **runspec_env}
 
+    # Tell the subprocess where its runspec.toml lives. Otherwise the tool's
+    # parse() would walk up from cwd (typically $HOME for SSH-launched serves)
+    # and fail to find the spec — even though serve already knew its location.
+    config_path = exec_specs.get(name, {}).get("config_path")
+    if config_path:
+        env["RUNSPEC_CONFIG"] = str(config_path)
+
     result = subprocess.run([*cmd, *argv], capture_output=True, text=True, env=env)
 
     if result.returncode == 0:
@@ -334,6 +342,7 @@ def _expand_tools(
     run_as: str | None,
     become_method: str,
     become_flags: str | None,
+    config_path: str | None = None,
 ) -> list[tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]]:
     """Expand a runnable into flat MCP tool entries, recursing into subcommands.
 
@@ -358,6 +367,7 @@ def _expand_tools(
                     run_as,
                     become_method,
                     become_flags,
+                    config_path,
                 )
             )
         return result
@@ -371,6 +381,7 @@ def _expand_tools(
                 "run_as": run_as,
                 "become_method": become_method,
                 "become_flags": become_flags,
+                "config_path": config_path,
             },
         )
     ]

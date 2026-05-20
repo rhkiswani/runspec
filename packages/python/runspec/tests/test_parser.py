@@ -72,6 +72,48 @@ class TestParseCleanErrors:
         result = runspec.parse(script_name="clean", argv=["--name", "hello"])
         assert result.name == "hello"
 
+    def test_runspec_config_env_var_overrides_walk_up(self, tmp_path, monkeypatch):
+        """RUNSPEC_CONFIG points parse() at a specific TOML, bypassing find_config."""
+        # Set up the actual spec at a path that cwd-walk would NOT find
+        spec_dir = tmp_path / "actual" / "package"
+        spec_dir.mkdir(parents=True)
+        (spec_dir / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [greet]
+                [greet.args]
+                name = {type = "str", required = true}
+            """),
+            encoding="utf-8",
+        )
+        # cwd is somewhere unrelated — no runspec.toml on the walk-up path
+        unrelated = tmp_path / "unrelated"
+        unrelated.mkdir()
+        monkeypatch.chdir(unrelated)
+        # Set the env var explicitly
+        monkeypatch.setenv("RUNSPEC_CONFIG", str(spec_dir / "runspec.toml"))
+
+        result = runspec.parse(script_name="greet", argv=["--name", "hello"])
+        assert result.name == "hello"
+
+    def test_explicit_config_path_beats_env_var(self, tmp_path, monkeypatch):
+        """parse(config_path=...) wins over RUNSPEC_CONFIG."""
+        env_spec_dir = tmp_path / "env"
+        env_spec_dir.mkdir()
+        (env_spec_dir / "runspec.toml").write_text(
+            '[greet]\n[greet.args]\nname = {type = "str", default = "from-env"}\n',
+            encoding="utf-8",
+        )
+        explicit_spec_dir = tmp_path / "explicit"
+        explicit_spec_dir.mkdir()
+        (explicit_spec_dir / "runspec.toml").write_text(
+            '[greet]\n[greet.args]\nname = {type = "str", default = "from-explicit"}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("RUNSPEC_CONFIG", str(env_spec_dir / "runspec.toml"))
+
+        result = runspec.parse(script_name="greet", argv=[], config_path=explicit_spec_dir / "runspec.toml")
+        assert result.name.value == "from-explicit"
+
 
 class TestPrintHelp:
     """Tests for the spec-driven --help renderer."""

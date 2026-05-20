@@ -607,8 +607,18 @@ error — the tool should never be reached).
 
 ### Reserved variables
 
-`RUNSPEC_AGENT=1` is always set. Scripts can use it to switch between
-human-readable and machine-readable output.
+| Variable | Set when | Purpose |
+|---|---|---|
+| `RUNSPEC_AGENT=1` | always (every `runspec serve` invocation) | The runnable can branch on agent vs. human invocation. |
+| `RUNSPEC_CONFIG=/abs/path/to/runspec.toml` | `runspec serve` subprocesses the runnable | Points `parse()` at the spec file directly, bypassing the cwd-walk. Without this, the subprocess inherits SSH's `$HOME` cwd and `find_config` fails. |
+
+`parse()` consults `RUNSPEC_CONFIG` after an explicit `config_path=` arg but
+before walking up from cwd. So the resolution order in language packs is:
+
+1. Explicit `config_path` passed to `parse()`
+2. `RUNSPEC_CONFIG` environment variable
+3. Walk up from cwd looking for `runspec.toml`
+4. Error
 
 ### Example
 

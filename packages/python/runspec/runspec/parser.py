@@ -44,9 +44,10 @@ def parse(script_name: str | None = None, argv: list[str] | None = None, config_
 
 def _parse_impl(script_name: str | None = None, argv: list[str] | None = None, config_path: Path | None = None) -> RunSpec:
     """Internal: full parse pipeline. Raises on error — call parse() for CLI use."""
-    # 1. Find config
+    # 1. Find config — explicit arg > RUNSPEC_CONFIG env var > walk up from cwd
     if config_path is None:
-        config_path = find_config()
+        env_config = os.environ.get("RUNSPEC_CONFIG")
+        config_path = Path(env_config) if env_config else find_config()
 
     # 2. Load and normalise TOML
     raw = load_raw(config_path)

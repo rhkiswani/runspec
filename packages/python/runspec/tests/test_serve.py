@@ -206,6 +206,39 @@ def test_tools_call_sets_runspec_agent_env(tmp_path):
     assert "1" in resp["result"]["content"][0]["text"]
 
 
+def test_tools_call_sets_runspec_config_env(tmp_path):
+    """The subprocess inherits RUNSPEC_CONFIG pointing at the source TOML."""
+    script = tmp_path / "show_config"
+    script.write_text("#!/bin/sh\necho $RUNSPEC_CONFIG", encoding="utf-8")
+    script.chmod(0o755)
+
+    tools = {"show_config": {"name": "show_config", "inputSchema": {"type": "object", "properties": {}}}}
+    exec_specs = {
+        "show_config": {
+            "command": [str(script)],
+            "config_path": "/some/pkg/runspec.toml",
+        }
+    }
+
+    resp = _handle_tools_call(6, {"name": "show_config", "arguments": {}}, tools, {}, exec_specs)
+    assert "/some/pkg/runspec.toml" in resp["result"]["content"][0]["text"]
+
+
+def test_tools_call_omits_runspec_config_when_unset(tmp_path):
+    """When exec_spec has no config_path, RUNSPEC_CONFIG is not injected."""
+    script = tmp_path / "show_config"
+    script.write_text("#!/bin/sh\necho \"[$RUNSPEC_CONFIG]\"", encoding="utf-8")
+    script.chmod(0o755)
+
+    tools = {"show_config": {"name": "show_config", "inputSchema": {"type": "object", "properties": {}}}}
+    exec_specs = {"show_config": {"command": [str(script)]}}  # no config_path
+
+    resp = _handle_tools_call(7, {"name": "show_config", "arguments": {}}, tools, {}, exec_specs)
+    out = resp["result"]["content"][0]["text"]
+    # If RUNSPEC_CONFIG wasn't set, $RUNSPEC_CONFIG expands to empty string → "[]"
+    assert out.strip() == "[]"
+
+
 # ── _find_script ──────────────────────────────────────────────────────────────
 
 
