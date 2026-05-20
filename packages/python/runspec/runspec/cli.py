@@ -5,7 +5,7 @@ Commands:
     runspec init   [--name <name>] [--lang python|typescript|javascript]
                    [--example] [--write-project] [--project-dir <path>]
     runspec local  [--format text|json|mcp|openai|anthropic] [--script <name>]
-    runspec serve  [--dev] [--registry <url>] [--name <name>] ...
+    runspec serve  [--dev]
     runspec jump   [--list-jump-hosts] [<jump_host> [<tool>] [-- tool-args...]]
 
 Help text, args, and examples are driven from runspec/runspec.toml — the
@@ -95,13 +95,7 @@ def cmd_serve(args: list[str]) -> None:
     from runspec.serve import serve
 
     parsed = _parse(script_name="runspec", argv=["serve"] + args, config_path=_CLI_CONFIG)
-    serve(
-        registry_url=parsed.registry.value,
-        name=parsed.name.value,
-        registry_key=parsed.registry_key.value,
-        registry_cert=parsed.registry_cert.value,
-        dev=bool(parsed.dev),
-    )
+    serve(dev=bool(parsed.dev))
 
 
 def cmd_jump(args: list[str]) -> None:

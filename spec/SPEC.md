@@ -60,11 +60,9 @@ Project-wide defaults. All fields are optional.
 |---|---|---|---|
 | `autonomy-default` | string | `"confirm"` | Autonomy when unspecified on a script |
 | `lang` | string | — | Preferred language for `runspec generate` |
+| `name` | string | — | MCP server name reported by `runspec serve`. Defaults to the venv directory name. |
 | `version` | string | `"1"` | runspec spec version |
-| `registry` | string | — | URL of the runspec-registry instance to heartbeat to |
-| `name` | string | — | Instance name reported to the registry. Defaults to the venv directory name |
-| `heartbeat` | int | `30` | Heartbeat interval in seconds |
-| `heartbeat_data` | array | `[]` | Extra data to include in heartbeats. Supports `"system"` (pid, uptime) |
+| `jump-hosts` | table | — | Per-alias jump host config. See [Jump Hosts](#jump-hosts). |
 
 ---
 
@@ -141,8 +139,8 @@ These fields control how `runspec jump` and compatible SSH clients run the tool 
 ### `hosts`
 
 Restricts a runnable to specific machines. `runspec serve` checks this against the
-current hostname at startup — tools not matching are excluded from the MCP tool list
-and not registered with the registry. Absent means available everywhere it is installed.
+current hostname at startup — tools not matching are excluded from the MCP tool list.
+Absent means available everywhere it is installed.
 
 ```toml
 [parse-app-logs]
@@ -190,10 +188,6 @@ An empty string (`""`) explicitly means no privilege escalation for that host or
 
 Invalid regex patterns cause `runspec serve` to exit with a clear error at startup.
 `runspec local` also validates all patterns at startup.
-
-`runspec serve` resolves `run_as` to a plain string before sending it to the registry.
-The registry stores only the resolved value per instance — the table form never leaves
-the local machine.
 
 ### `become_method`
 
@@ -526,40 +520,6 @@ When emitting to agent formats, implementations must include:
 - `x-autonomy-reason` — reason if provided
 - `x-output` — output type (`"text"` if not declared)
 - `inputSchema` — JSON Schema object of all arguments
-
----
-
-## Registry Integration
-
-`runspec serve` can register with a `runspec-registry` instance to make tools
-discoverable across a fleet. The registry is a read-only catalog — it stores
-tool specs and host information but cannot execute anything.
-
-### What serve registers
-
-On connect, `runspec serve` sends:
-
-- Instance ID (UUID, generated at startup)
-- Hostname of the current machine
-- Instance name and version
-- Per tool: name, description, full command path, resolved `run_as`, `become_method`,
-  `become_flags`, and the full input schema
-
-Tools excluded by the `hosts` field are not sent.
-
-### Heartbeat
-
-Sent every `heartbeat` seconds. If the registry responds `"refresh"`, serve resends
-the full tool list. On SIGTERM, serve sends a deregister message before exiting.
-
-### CLI flags
-
-| Flag | Description |
-|---|---|
-| `--registry <url>` | Registry URL. Overrides `[config] registry`. |
-| `--name <name>` | Instance name. Overrides `[config] name`. |
-| `--registry-key <key>` | API key for write endpoint authentication. |
-| `--registry-cert <path>` | Custom CA certificate bundle for HTTPS verification. |
 
 ---
 

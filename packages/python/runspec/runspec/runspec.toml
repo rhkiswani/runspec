@@ -52,17 +52,12 @@ description = "Start an MCP stdio server exposing all installed runnables as too
 autonomy    = "confirm"
 
 examples = [
-  {cmd = "runspec serve",                                  description = "Serve installed runnables"},
-  {cmd = "runspec serve --dev",                            description = "Also scan project for runspec.toml files"},
-  {cmd = "runspec serve --registry http://registry:8080",  description = "Heartbeat to registry"},
+  {cmd = "runspec serve",       description = "Serve installed runnables"},
+  {cmd = "runspec serve --dev", description = "Also scan project for runspec.toml files"},
 ]
 
 [runspec.commands.serve.args]
-dev           = {type = "flag", description = "Also discover runnables from runspec.toml files under the project root (development mode)", default = false}
-registry      = {type = "str", description = "URL of the runspec-registry to heartbeat to",               required = false}
-name          = {type = "str", description = "Instance name reported to the registry (defaults to venv directory name)", required = false}
-registry-key  = {type = "str", description = "API key for authenticated registry writes",                  required = false}
-registry-cert = {type = "str", description = "Path to CA certificate for registry TLS verification",      required = false}
+dev = {type = "flag", description = "Also discover runnables from runspec.toml files under the project root (development mode)", default = false}
 
 [runspec.commands.jump]
 description = "List jump hosts, list tools on a jump host, or run a tool via SSH+MCP"

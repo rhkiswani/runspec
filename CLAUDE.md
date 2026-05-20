@@ -196,7 +196,7 @@ Both Python and Node packages are active and published.
 |---|---|---|
 | `runspec` | 0.7.0 | PyPI |
 | `runspec-node` | 0.6.0 | npm — CLI rename pending (node-v0.7.0) |
-| `runspec-registry` | 0.1.1 | PyPI |
+| `runspec-registry` | 0.1.1 | PyPI (archived — registry was removed from `runspec serve` in favour of the SSH+MCP jump-host model) |
 
 **Next:** Node CLI rename — `discover`→`local`, `run`→`jump`, `check`+`emit` absorbed into `local`. Mirror Python 0.7.0 exactly. SSH execution in Node comes after.
 
