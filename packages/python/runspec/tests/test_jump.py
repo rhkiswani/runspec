@@ -313,7 +313,7 @@ def test_report_remote_failure_bare_name_blames_path(capsys: pytest.CaptureFixtu
 
 
 def test_report_remote_failure_absolute_path_blames_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
-    """exit 127 with explicit `/path/to/runspec` → 'path does not exist' message."""
+    """exit 127 with explicit `/path/to/runspec` → path hint in message."""
     from runspec.jump import _report_remote_failure
 
     with pytest.raises(SystemExit) as exc:
@@ -322,7 +322,7 @@ def test_report_remote_failure_absolute_path_blames_missing_file(capsys: pytest.
     err = capsys.readouterr().err
     assert "exit 127" in err
     assert "/nonexistent/.venv/bin/runspec" in err
-    assert "does not exist" in err
+    assert "verify the path exists" in err
     # PATH-specific hint should NOT be in the absolute-path branch
     assert "remote shell's PATH" not in err
 

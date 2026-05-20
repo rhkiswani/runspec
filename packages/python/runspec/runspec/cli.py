@@ -306,7 +306,7 @@ def _build_example_toml() -> str:
         "#\n"
         "# Note: SSH runs commands in a non-login shell, so it doesn't source\n"
         "# ~/.bashrc / ~/.profile. If `runspec` isn't on the remote's default\n"
-        '# PATH (e.g. you installed into a venv), set bin to the full path.\n'
+        "# PATH (e.g. you installed into a venv), set bin to the full path.\n"
         "[config.jump-hosts.localhost]\n"
         'host = "localhost"\n'
         '# bin = "/path/to/.venv/bin/runspec"   # set when runspec isn\'t on the remote shell PATH\n'
@@ -890,6 +890,3 @@ def _print_local_text(discovered: list[dict[str, Any]]) -> None:
 
     if errors:
         sys.exit(1)
-
-
-

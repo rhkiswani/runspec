@@ -138,8 +138,7 @@ def _report_remote_failure(proc: subprocess.Popen[bytes], bin_path: str | None =
         prefix = f"✗  Remote command failed (exit {exit_code}) before the MCP handshake completed.\n"
         if bin_path and "/" in bin_path:
             sys.stderr.write(
-                prefix
-                + "   If the error above doesn't explain it, verify the path exists on the remote:\n"
+                prefix + "   If the error above doesn't explain it, verify the path exists on the remote:\n"
                 f"     {bin_path}\n"
                 "   Common causes:\n"
                 "     - the venv path differs between local and remote\n"
@@ -148,8 +147,7 @@ def _report_remote_failure(proc: subprocess.Popen[bytes], bin_path: str | None =
             )
         else:
             sys.stderr.write(
-                prefix
-                + f"   `{bin_path or 'runspec'}` is not on the remote shell's PATH.\n"
+                prefix + f"   `{bin_path or 'runspec'}` is not on the remote shell's PATH.\n"
                 '   Fix: set `bin = "/full/path/to/runspec"` in [config.jump-hosts.<alias>],\n'
                 "   or export RUNSPEC_JUMP_BIN in your local shell.\n"
                 "   (SSH commands run in a non-login shell and don't source ~/.bashrc / ~/.profile.)\n"

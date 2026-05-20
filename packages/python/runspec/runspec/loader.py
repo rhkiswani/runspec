@@ -124,10 +124,12 @@ def _normalise_examples(raw: Any) -> list[dict[str, str]]:
             cmd = entry.get("cmd") or entry.get("command")
             if not cmd:
                 continue
-            result.append({
-                "cmd": str(cmd),
-                "description": str(entry.get("description", "")),
-            })
+            result.append(
+                {
+                    "cmd": str(cmd),
+                    "description": str(entry.get("description", "")),
+                }
+            )
     return result
 
 

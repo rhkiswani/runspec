@@ -227,7 +227,7 @@ def test_tools_call_sets_runspec_config_env(tmp_path):
 def test_tools_call_omits_runspec_config_when_unset(tmp_path):
     """When exec_spec has no config_path, RUNSPEC_CONFIG is not injected."""
     script = tmp_path / "show_config"
-    script.write_text("#!/bin/sh\necho \"[$RUNSPEC_CONFIG]\"", encoding="utf-8")
+    script.write_text('#!/bin/sh\necho "[$RUNSPEC_CONFIG]"', encoding="utf-8")
     script.chmod(0o755)
 
     tools = {"show_config": {"name": "show_config", "inputSchema": {"type": "object", "properties": {}}}}
