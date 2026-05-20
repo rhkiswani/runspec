@@ -16,11 +16,12 @@ description = "Scaffold a new runnable — creates runspec.toml and a code stub"
 autonomy    = "confirm"
 
 examples = [
-  {cmd = "runspec init",                                description = "Scaffold using current directory name"},
-  {cmd = "runspec init --name deploy",                  description = "Scaffold a runnable called 'deploy'"},
-  {cmd = "runspec init --example",                      description = "Generate worked example (clean + scan)"},
-  {cmd = "runspec init --example --write-project",      description = "Also generate pyproject.toml in parent dir"},
-  {cmd = "runspec init --name myapp --lang typescript", description = "Use TypeScript code stub"},
+  {cmd = "runspec init",                                              description = "Scaffold using current directory name"},
+  {cmd = "runspec init --name deploy",                                description = "Scaffold a runnable called 'deploy'"},
+  {cmd = "runspec init --example",                                    description = "Generate worked example (clean + scan)"},
+  {cmd = "runspec init --example --write-project",                    description = "Also generate pyproject.toml in parent dir"},
+  {cmd = "runspec init --write-project --project-dir /tmp/myproject", description = "Write project files to a specific path"},
+  {cmd = "runspec init --name myapp --lang typescript",               description = "Use TypeScript code stub"},
 ]
 
 [runspec.commands.init.args]

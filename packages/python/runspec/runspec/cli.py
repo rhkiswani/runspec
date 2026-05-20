@@ -2,10 +2,14 @@
 cli.py — The runspec command-line interface.
 
 Commands:
-    runspec init    [--name <name>] [--lang python|typescript|javascript] [--example]
-    runspec local   [--format text|json|mcp|openai|anthropic] [--script <name>]
-    runspec serve   [--dev] [--registry <url>] [--name <name>] ...
-    runspec jump    [--list-jump-hosts] [<jump_host> [<tool>] [-- tool-args...]]
+    runspec init   [--name <name>] [--lang python|typescript|javascript]
+                   [--example] [--write-project] [--project-dir <path>]
+    runspec local  [--format text|json|mcp|openai|anthropic] [--script <name>]
+    runspec serve  [--dev] [--registry <url>] [--name <name>] ...
+    runspec jump   [--list-jump-hosts] [<jump_host> [<tool>] [-- tool-args...]]
+
+Help text, args, and examples are driven from runspec/runspec.toml — the
+CLI parses --help through parse() against its own bundled spec.
 """
 
 from __future__ import annotations
