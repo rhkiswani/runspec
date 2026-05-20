@@ -267,6 +267,10 @@ def _init_runspec_toml(path: Path, name: str, example: bool = False) -> None:
 
 def _build_example_toml() -> str:
     return (
+        "# `meta = {...}` is a pass-through table for project-defined metadata —\n"
+        "# runspec never interprets it. Use it for unit hints, impact tags, owner,\n"
+        "# runbook URLs, anything your tools or UI want to surface.\n"
+        "\n"
         "[clean]\n"
         'description = "Find and optionally delete stale temporary files in a directory"\n'
         'autonomy    = "confirm"\n'
@@ -274,9 +278,9 @@ def _build_example_toml() -> str:
         "[clean.args]\n"
         'directory  = {type = "path",   description = "Directory to scan",                            default = "."}\n'
         'pattern    = {type = "str",    description = "Glob pattern to match",                        default = "*.tmp"}\n'
-        'older_than = {type = "int",    description = "Only match files older than N days",           default = 7}\n'
+        'older_than = {type = "int",    description = "Only match files older than N days",           default = 7,     meta = {unit = "days"}}\n'
         'format     = {type = "choice", description = "Output format", options = ["text", "json"],    default = "text"}\n'
-        'delete     = {type = "flag",   description = "Delete matched files (asks for confirmation)", default = false}\n'
+        'delete     = {type = "flag",   description = "Delete matched files",                         default = false, meta = {impact = "destructive"}}\n'
         "\n"
         "[scan]\n"
         'description = "Scan for stale temporary files and report what clean would delete"\n'
@@ -284,9 +288,9 @@ def _build_example_toml() -> str:
         'output      = "json"\n'
         "\n"
         "[scan.args]\n"
-        'directory  = {type = "path", description = "Directory to scan",                default = "."}\n'
-        'pattern    = {type = "str",  description = "Glob pattern to match",             default = "*.tmp"}\n'
-        'older_than = {type = "int",  description = "Only match files older than N days", default = 7}\n'
+        'directory  = {type = "path", description = "Directory to scan",                  default = "."}\n'
+        'pattern    = {type = "str",  description = "Glob pattern to match",              default = "*.tmp"}\n'
+        'older_than = {type = "int",  description = "Only match files older than N days", default = 7, meta = {unit = "days"}}\n'
     )
 
 
@@ -540,7 +544,7 @@ def _print_next_steps(install_from: str | None, example: bool = False) -> None:
         print()
         print("    scan                    # read-only — lists stale files")
         print("    scan --format json      # agent-ready output")
-        print("    clean --delete          # destructive — triggers confirmation")
+        print("    clean --delete          # destructive — refused unless agent has autonomy='autonomous'")
 
 
 def _write_and_verify(path: Path, content: str, original: str | None) -> None:
