@@ -431,6 +431,19 @@ The two non-obvious defaults to remember:
 
 These defaults are not configurable at the `[config]` level. The single project-wide arg-related setting is `[config] autonomy-default`, which only affects the autonomy inheritance rule above. Keeping the other defaults stable across projects is intentional: it makes any `runspec.toml` predictable to read.
 
+### Uniqueness and Reserved Values
+
+The following constraints are enforced at parse time and cause a clean error
+(not silent shadowing) when violated:
+
+- **`short` must be unique within a runnable.** Two args declaring the same
+  short flag (e.g. `short = "-v"`) is an error.
+- **`-h` is reserved for `--help`.** An arg may not declare `short = "-h"`.
+- **`position` must be unique within a runnable.** Two args declaring the
+  same `position = N` is an error.
+- **At most one `rest` arg per runnable.** Two args with `type = "rest"`
+  is an error.
+
 ### Positional Arguments
 
 Args with `position = N` are populated from non-flag tokens in declaration

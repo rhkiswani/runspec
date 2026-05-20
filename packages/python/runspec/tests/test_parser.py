@@ -183,6 +183,26 @@ class TestPrintHelp:
         assert "Options:" in out
         assert "\nArguments:\n" not in out
 
+    def test_help_renders_short_flags(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "runspec.toml").write_text(
+            textwrap.dedent("""\
+                [deploy]
+                description = "Deploy something"
+                [deploy.args]
+                verbose = {type = "flag", short = "-v", default = false, description = "Verbose mode"}
+                env     = {type = "str",  short = "-e", required = true,  description = "Target env"}
+            """),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            runspec.parse(script_name="deploy", argv=["--help"])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        # Short form rendered alongside the long form
+        assert "-v, --verbose" in out
+        assert "-e, --env" in out
+
     def test_help_without_examples_omits_section(self, tmp_path, monkeypatch, capsys):
         (tmp_path / "runspec.toml").write_text(
             textwrap.dedent("""\
@@ -289,6 +309,67 @@ class TestParseArgvHappyPath:
         out = capsys.readouterr().out
         assert "--env" in out
         assert "--verbose" in out
+
+
+class TestParseArgvCollisionDetection:
+    """Spec-level collisions caught at parse time — no silent shadowing."""
+
+    def test_duplicate_short_errors(self, capsys):
+        spec = {
+            "verbose": {"type": "flag", "short": "-v"},
+            "version": {"type": "flag", "short": "-v"},  # collides
+        }
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv([], spec)
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "-v" in out
+        assert "verbose" in out
+        assert "version" in out
+
+    def test_short_h_reserved(self, capsys):
+        spec = {"help-mode": {"type": "flag", "short": "-h"}}
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv([], spec)
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "-h" in out
+        assert "reserved" in out.lower()
+
+    def test_duplicate_position_errors(self, capsys):
+        spec = {
+            "first": {"type": "str", "position": 1},
+            "second": {"type": "str", "position": 1},  # collides
+        }
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv([], spec)
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "Position 1" in out or "position 1" in out.lower()
+
+    def test_multiple_rest_args_errors(self, capsys):
+        spec = {
+            "extra1": {"type": "rest"},
+            "extra2": {"type": "rest"},  # second rest arg
+        }
+        with pytest.raises(SystemExit) as exc:
+            _parse_argv([], spec)
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "rest" in out.lower()
+        assert "extra1" in out
+        assert "extra2" in out
+
+    def test_no_collision_when_shorts_differ(self):
+        # Sanity: distinct shorts work fine
+        spec = {
+            "verbose": {"type": "flag", "short": "-v"},
+            "env": {"type": "str", "short": "-e"},
+        }
+        # Should not raise
+        result = _parse_argv(["-v", "-e", "prod"], spec)
+        assert result["verbose"] is True
+        assert result["env"] == "prod"
 
     def test_absent_arg_is_none(self):
         result = _parse_argv([], {"env": {"type": "str"}})

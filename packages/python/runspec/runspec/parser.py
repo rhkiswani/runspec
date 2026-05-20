@@ -202,7 +202,8 @@ def _print_help(name: str, script: dict[str, Any], command: str | None) -> None:
         header = "Options:" if (positional_args or rest_args) else "Arguments:"
         print(f"\n{header}")
         for arg_name, spec in flag_args:
-            flag = f"  --{arg_name}"
+            short = spec.get("short")
+            flag = f"  {short}, --{arg_name}" if short else f"  --{arg_name}"
             arg_type = spec.get("type", "str")
             parts = []
             if arg_type == "flag":
@@ -216,9 +217,9 @@ def _print_help(name: str, script: dict[str, Any], command: str | None) -> None:
             if spec.get("options"):
                 parts.append(f"one of: {', '.join(str(o) for o in spec['options'])}")
             if spec.get("description"):
-                print(f"{flag:<24} {spec['description']}  ({', '.join(parts)})")
+                print(f"{flag:<28} {spec['description']}  ({', '.join(parts)})")
             else:
-                print(f"{flag:<24} ({', '.join(parts)})")
+                print(f"{flag:<28} ({', '.join(parts)})")
 
     # ── Autonomy ──────────────────────────────────────────────────────────────
     autonomy = script.get("autonomy")
@@ -289,18 +290,41 @@ def _parse_argv(
     positionals: list[tuple[int, str, dict[str, Any]]] = []  # (position, norm_name, spec)
     rest_name: str | None = None
 
+    # Track owners for collision detection — error early on duplicates rather
+    # than silently last-wins, which is the worst kind of bug.
+    shorts_seen: dict[str, str] = {}
+    positions_seen: dict[int, str] = {}
+    rest_owner: str | None = None
+
     for name, spec in arg_specs.items():
         normalised = name.replace("-", "_")
         if spec.get("type") == "rest":
+            if rest_owner is not None:
+                print(f"✗  Multiple 'rest' args declared: '{rest_owner}' and '{name}'. At most one per runnable.")
+                sys.exit(1)
+            rest_owner = name
             rest_name = normalised
             continue
         if spec.get("position") is not None:
-            positionals.append((spec["position"], normalised, spec))
+            pos = spec["position"]
+            if pos in positions_seen:
+                print(f"✗  Position {pos} is declared by both '{positions_seen[pos]}' and '{name}'.")
+                sys.exit(1)
+            positions_seen[pos] = name
+            positionals.append((pos, normalised, spec))
             continue
         name_map[f"--{name}"] = normalised
         name_map[f"--{normalised}"] = normalised
         if spec.get("short"):
-            short_map[spec["short"]] = normalised
+            short = spec["short"]
+            if short == "-h":
+                print(f"✗  Argument '--{name}' declares short='-h', which is reserved for --help.")
+                sys.exit(1)
+            if short in shorts_seen:
+                print(f"✗  Short flag '{short}' is declared by both '--{shorts_seen[short]}' and '--{name}'.")
+                sys.exit(1)
+            shorts_seen[short] = name
+            short_map[short] = normalised
 
     positionals.sort(key=lambda p: p[0])
 
