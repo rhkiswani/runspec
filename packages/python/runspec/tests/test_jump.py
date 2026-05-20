@@ -16,6 +16,28 @@ def test_normalise_jump_hosts_basic() -> None:
     assert result["myserver"]["bin"] == "/usr/local/bin/runspec"
     assert result["myserver"]["user"] == "deploy"
     assert result["myserver"]["port"] == 22
+    # New fields default cleanly
+    assert result["myserver"]["use_ssh_config"] is True
+    assert result["myserver"]["ssh_options"] == []
+
+
+def test_normalise_jump_hosts_bin_unset_returns_none() -> None:
+    """Loader returns None for bin when unset; jump.ssh_cmd applies the cascade."""
+    raw = {"box": {}}
+    result = _normalise_jump_hosts(raw)
+    assert result["box"]["bin"] is None
+
+
+def test_normalise_jump_hosts_use_ssh_config_false() -> None:
+    raw = {"box": {"use-ssh-config": False}}
+    result = _normalise_jump_hosts(raw)
+    assert result["box"]["use_ssh_config"] is False
+
+
+def test_normalise_jump_hosts_ssh_options_list() -> None:
+    raw = {"box": {"ssh-options": ["ConnectTimeout=10", "StrictHostKeyChecking=no"]}}
+    result = _normalise_jump_hosts(raw)
+    assert result["box"]["ssh_options"] == ["ConnectTimeout=10", "StrictHostKeyChecking=no"]
 
 
 def test_normalise_jump_hosts_explicit_host() -> None:
@@ -83,6 +105,74 @@ def test_ssh_cmd_with_key() -> None:
 def test_ssh_cmd_ends_with_serve() -> None:
     cfg = {"host": "h", "bin": "runspec", "user": None, "port": 22, "ssh_key": None}
     assert ssh_cmd(cfg)[-1] == "serve"
+
+
+def test_ssh_cmd_use_ssh_config_false_adds_dash_F_null() -> None:
+    cfg = {"host": "h", "bin": "runspec", "user": None, "port": 22, "ssh_key": None, "use_ssh_config": False}
+    cmd = ssh_cmd(cfg)
+    assert "-F" in cmd
+    assert "/dev/null" in cmd
+
+
+def test_ssh_cmd_use_ssh_config_true_omits_dash_F() -> None:
+    cfg = {"host": "h", "bin": "runspec", "user": None, "port": 22, "ssh_key": None, "use_ssh_config": True}
+    cmd = ssh_cmd(cfg)
+    assert "-F" not in cmd
+
+
+def test_ssh_cmd_ssh_options_each_becomes_dash_o() -> None:
+    cfg = {
+        "host": "h",
+        "bin": "runspec",
+        "user": None,
+        "port": 22,
+        "ssh_key": None,
+        "ssh_options": ["ConnectTimeout=10", "Compression=yes"],
+    }
+    cmd = ssh_cmd(cfg)
+    # Each option gets its own -o flag
+    assert cmd.count("-o") == 3  # BatchMode + two user options
+    assert "ConnectTimeout=10" in cmd
+    assert "Compression=yes" in cmd
+
+
+def test_ssh_cmd_argv_order_explicit_before_ssh_options() -> None:
+    """ssh-options are placed after explicit -p/-i so explicit fields win on conflict."""
+    cfg = {
+        "host": "h",
+        "bin": "runspec",
+        "user": None,
+        "port": 2222,
+        "ssh_key": "/tmp/key",
+        "ssh_options": ["Port=99"],  # would lose to -p 2222 via OpenSSH first-wins
+    }
+    cmd = ssh_cmd(cfg)
+    port_idx = cmd.index("-p")
+    user_opt_idx = cmd.index("Port=99")
+    assert port_idx < user_opt_idx
+
+
+def test_ssh_cmd_bin_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When TOML has no bin, RUNSPEC_JUMP_BIN env var supplies the default."""
+    monkeypatch.setenv("RUNSPEC_JUMP_BIN", "/opt/runspec/bin/runspec")
+    cfg = {"host": "h", "bin": None, "user": None, "port": 22, "ssh_key": None}
+    cmd = ssh_cmd(cfg)
+    assert "/opt/runspec/bin/runspec" in cmd
+
+
+def test_ssh_cmd_bin_toml_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNSPEC_JUMP_BIN", "/env/runspec")
+    cfg = {"host": "h", "bin": "/toml/runspec", "user": None, "port": 22, "ssh_key": None}
+    cmd = ssh_cmd(cfg)
+    assert "/toml/runspec" in cmd
+    assert "/env/runspec" not in cmd
+
+
+def test_ssh_cmd_bin_default_when_no_toml_no_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RUNSPEC_JUMP_BIN", raising=False)
+    cfg = {"host": "h", "bin": None, "user": None, "port": 22, "ssh_key": None}
+    cmd = ssh_cmd(cfg)
+    assert "runspec" in cmd
 
 
 # ── _parse_argv against the jump command's spec ───────────────────────────────

@@ -66,10 +66,13 @@ def _normalise_jump_hosts(raw: dict[str, Any]) -> dict[str, Any]:
         result[alias] = {
             "name": alias,
             "host": cfg.get("host", alias),
-            "bin": cfg.get("bin", "runspec"),
+            # bin: None here lets jump.ssh_cmd cascade TOML → RUNSPEC_JUMP_BIN → "runspec"
+            "bin": cfg.get("bin"),
             "user": cfg.get("user"),
             "port": int(cfg.get("port", 22)),
             "ssh_key": cfg.get("ssh-key"),
+            "use_ssh_config": bool(cfg.get("use-ssh-config", True)),
+            "ssh_options": list(cfg.get("ssh-options", [])),
         }
     return result
 

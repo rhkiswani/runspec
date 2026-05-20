@@ -268,8 +268,10 @@ def _init_runspec_toml(path: Path, name: str, example: bool = False) -> None:
 def _build_example_toml() -> str:
     return (
         "# Jump hosts — `runspec jump <alias>` opens SSH+MCP to that host and runs\n"
-        "# a tool there. Add one entry per host. Optional fields: user, port,\n"
-        '# ssh-key, bin (path to the remote runspec binary, defaults to "runspec").\n'
+        "# a tool there. Add one entry per host. Optional fields:\n"
+        "#   user, port, ssh-key, bin   — direct overrides (bin env: RUNSPEC_JUMP_BIN)\n"
+        "#   use-ssh-config = false      — ignore ~/.ssh/config (passes -F /dev/null)\n"
+        '#   ssh-options = ["X=Y", ...]  — extra -o KEY=VALUE options passed to ssh\n'
         "[config.jump-hosts.localhost]\n"
         'host = "localhost"\n'
         "\n"

@@ -8,22 +8,43 @@ on the remote, and communicates via JSON-RPC stdio (MCP 2024-11-05).
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from typing import Any
 
 
 def ssh_cmd(host_cfg: dict[str, Any]) -> list[str]:
-    """Build the SSH command list to start runspec serve on the remote."""
+    """Build the SSH command list to start runspec serve on the remote.
+
+    Argv order matters — OpenSSH uses first-value-wins for command-line
+    options, so the structure is:
+
+        ssh -o BatchMode=yes        ← always; locked because stdin is JSON-RPC
+            [-F /dev/null]          ← when use-ssh-config = false
+            [-p PORT] [-i KEY]      ← explicit fields next (highest precedence)
+            [-o OPT]...             ← ssh-options pass-through (lowest precedence)
+            user@host bin serve
+    """
     cmd = ["ssh", "-o", "BatchMode=yes"]
+
+    if not host_cfg.get("use_ssh_config", True):
+        cmd += ["-F", "/dev/null"]
+
     if host_cfg.get("port") and host_cfg["port"] != 22:
         cmd += ["-p", str(host_cfg["port"])]
     if host_cfg.get("ssh_key"):
         cmd += ["-i", host_cfg["ssh_key"]]
+
+    for opt in host_cfg.get("ssh_options") or []:
+        cmd += ["-o", str(opt)]
+
     host = host_cfg["host"]
     target = f"{host_cfg['user']}@{host}" if host_cfg.get("user") else host
     cmd.append(target)
-    cmd.append(host_cfg.get("bin", "runspec"))
+
+    bin_path = host_cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
+    cmd.append(bin_path)
     cmd.append("serve")
     return cmd
 

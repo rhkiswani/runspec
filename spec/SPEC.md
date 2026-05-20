@@ -60,6 +60,85 @@ Project-wide defaults. All fields are optional.
 | `version` | string | `"1"` | runspec spec version |
 | `jump-hosts` | table | — | Per-alias jump host config. See [Jump Hosts](#jump-hosts). |
 
+### Jump Hosts
+
+`[config.jump-hosts.<alias>]` declares a target for `runspec jump`. The
+alias is the dict key — `runspec jump prod` looks up
+`[config.jump-hosts.prod]`. Each alias entry accepts these fields:
+
+| Field | Type | Default | Env fallback | Description |
+|---|---|---|---|---|
+| `host` | string | the alias | — | Hostname or IP. Usually matches a `Host` entry in `~/.ssh/config`; can be a literal hostname when ssh-config isn't involved. |
+| `bin` | string | `"runspec"` | `RUNSPEC_JUMP_BIN` | Path to the `runspec` binary on the remote. |
+| `user` | string | — | — | SSH user (becomes `user@host`). |
+| `port` | int | `22` | — | SSH port. Only emitted as `-p N` when non-default. |
+| `ssh-key` | string | — | — | Path to private key (becomes `-i <path>`). |
+| `use-ssh-config` | bool | `true` | — | When `false`, ssh runs with `-F /dev/null` and ignores `~/.ssh/config` entirely. |
+| `ssh-options` | array of string | `[]` | — | Extra `-o KEY=VALUE` options passed through to ssh. Each item becomes one `-o` flag. |
+
+#### ssh argv construction
+
+`runspec jump` shells out to the system `ssh` binary. The argv order
+matters because OpenSSH uses first-value-wins for command-line options:
+
+```
+ssh -o BatchMode=yes        ← always; locked because stdin is JSON-RPC
+    [-F /dev/null]          ← when use-ssh-config = false
+    [-p PORT]               ← when port ≠ 22
+    [-i SSH-KEY]            ← when ssh-key is set
+    [-o OPT]...             ← each ssh-options item
+    [user@]host bin serve
+```
+
+`BatchMode=yes` is locked because `runspec jump` pipes JSON-RPC over
+stdin/stdout — interactive prompts would corrupt the protocol. Use
+`ssh-agent` for keys that need a passphrase.
+
+Explicit fields (`port`, `ssh-key`) appear in argv before `ssh-options`,
+so on conflict the explicit field wins. If you specify both `port = 2222`
+and `ssh-options = ["Port=99"]`, the connection uses port 2222.
+
+#### Typical usage patterns
+
+**Rely on ssh-config** — the cleanest setup. Put per-host config in
+`~/.ssh/config`, give the alias the same name as the `Host` entry:
+
+```toml
+[config.jump-hosts.prod-app]
+# everything (user, port, key, ProxyJump) comes from ssh-config
+```
+
+**Literal hostname with alias-as-label** — when the alias is a friendly
+project name but ssh-config doesn't have it:
+
+```toml
+[config.jump-hosts.shorty]
+host = "actual.hostname.internal.example.com"
+```
+
+**Ignore ssh-config entirely** — useful in CI or shared environments:
+
+```toml
+[config.jump-hosts.ci-target]
+host           = "10.0.0.5"
+user           = "deploy"
+ssh-key        = "/secrets/deploy_key"
+use-ssh-config = false
+```
+
+**Pass-through options** — for everything ssh-config supports but TOML
+doesn't have a dedicated field for:
+
+```toml
+[config.jump-hosts.bastion-fronted]
+host        = "internal.example.com"
+ssh-options = [
+  "ProxyJump=bastion.example.com",
+  "ConnectTimeout=10",
+  "ServerAliveInterval=30",
+]
+```
+
 ---
 
 ## Runnable Definition
