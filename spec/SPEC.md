@@ -69,7 +69,7 @@ alias is the dict key — `runspec jump prod` looks up
 | Field | Type | Default | Env fallback | Description |
 |---|---|---|---|---|
 | `host` | string | the alias | — | Hostname or IP. Usually matches a `Host` entry in `~/.ssh/config`; can be a literal hostname when ssh-config isn't involved. |
-| `bin` | string | `"runspec"` | `RUNSPEC_JUMP_BIN` | Path to the `runspec` binary on the remote. |
+| `bin` | string | `"runspec"` | `RUNSPEC_JUMP_BIN` | Path to the `runspec` binary on the remote. Basename **must** be `runspec` (or `runspec.exe` on Windows) — the field is locked to runspec and cannot be redirected to other executables. |
 | `user` | string | — | — | SSH user (becomes `user@host`). |
 | `port` | int | `22` | — | SSH port. Only emitted as `-p N` when non-default. |
 | `ssh-key` | string | — | — | Path to private key (becomes `-i <path>`). |

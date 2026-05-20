@@ -44,9 +44,36 @@ def ssh_cmd(host_cfg: dict[str, Any]) -> list[str]:
     cmd.append(target)
 
     bin_path = host_cfg.get("bin") or os.environ.get("RUNSPEC_JUMP_BIN") or "runspec"
+    _validate_bin_path(bin_path)
     cmd.append(bin_path)
     cmd.append("serve")
     return cmd
+
+
+# Names accepted as the remote runspec executable. Anything else is rejected.
+# Locks the `bin` field to its documented purpose (no accidental redirection
+# to unrelated binaries via a TOML edit or stale env var).
+_VALID_BIN_NAMES = frozenset({"runspec", "runspec.exe"})
+
+
+def _validate_bin_path(bin_path: str) -> None:
+    """Enforce that the remote bin is named `runspec` (or `runspec.exe`).
+
+    Cosmetic enough that a determined local user can copy any binary to a
+    file named `runspec` and point at it, but catches every accidental
+    misuse — wrong path, stale value, attempted redirection via TOML.
+    """
+    import os.path
+
+    name = os.path.basename(bin_path)
+    if name not in _VALID_BIN_NAMES:
+        sys.stderr.write(
+            f"✗  Jump-host `bin` must point at a runspec executable.\n"
+            f"   Got: {bin_path!r} (basename {name!r})\n"
+            f"   Expected basename: 'runspec' (or 'runspec.exe' on Windows).\n"
+            f"   This field is locked to the runspec CLI; it cannot be redirected.\n"
+        )
+        sys.exit(1)
 
 
 def _open_session(host_cfg: dict[str, Any]) -> subprocess.Popen[bytes]:

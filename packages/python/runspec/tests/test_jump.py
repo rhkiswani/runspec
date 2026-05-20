@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from runspec.jump import parse_tool_argv, ssh_cmd
@@ -331,3 +333,53 @@ def test_report_remote_failure_stdout_closed_but_process_alive(capsys: pytest.Ca
     assert exc.value.code == 1
     err = capsys.readouterr().err
     assert "closed stdout unexpectedly" in err
+
+
+# ── _validate_bin_path — lock `bin` to the runspec executable ────────────────
+
+
+def _cfg(**overrides: Any) -> dict[str, Any]:
+    base = {"host": "h", "user": None, "port": 22, "ssh_key": None}
+    base.update(overrides)
+    return base
+
+
+def test_bin_path_default_runspec_accepted() -> None:
+    # Sanity: default "runspec" with no path qualifies
+    ssh_cmd(_cfg(bin="runspec"))
+
+
+def test_bin_path_full_path_to_runspec_accepted() -> None:
+    ssh_cmd(_cfg(bin="/opt/svc-a/.venv/bin/runspec"))
+
+
+def test_bin_path_runspec_exe_accepted() -> None:
+    ssh_cmd(_cfg(bin="C:/Users/dev/.venv/Scripts/runspec.exe"))
+
+
+def test_bin_path_redirection_rejected(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        ssh_cmd(_cfg(bin="/usr/bin/cat"))
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "runspec" in err
+    assert "/usr/bin/cat" in err
+    assert "cat" in err  # basename mentioned
+
+
+def test_bin_path_rejected_message_explains_lock(capsys: pytest.CaptureFixture[str]) -> None:
+    """Error message tells the developer the field is intentionally locked."""
+    with pytest.raises(SystemExit):
+        ssh_cmd(_cfg(bin="/some/other/tool"))
+    err = capsys.readouterr().err
+    assert "locked" in err.lower() or "cannot be redirected" in err.lower()
+
+
+def test_bin_path_env_var_also_validated(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """RUNSPEC_JUMP_BIN goes through the same check."""
+    monkeypatch.setenv("RUNSPEC_JUMP_BIN", "/etc/passwd")
+    with pytest.raises(SystemExit) as exc:
+        ssh_cmd(_cfg(bin=None))  # falls back to env var
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "/etc/passwd" in err
