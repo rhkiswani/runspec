@@ -8,6 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/JasonFinestone/runspec/actions/workflows/python.yml/badge.svg)](https://github.com/JasonFinestone/runspec/actions)
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://JasonFinestone.github.io/runspec)
+[![SafeSkill 20/100](https://img.shields.io/badge/SafeSkill-20%2F100_Blocked-red)](https://safeskill.dev/scan/jasonfinestone-runspec)
 
 ---
 
